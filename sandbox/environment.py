@@ -107,3 +107,46 @@ def prepare_library_mount_points(
 		mount_points.append((source, destination))
 
 	return mount_points
+
+def build_chroot_command(
+		root: Path,
+		code: str,
+) -> list[str]:
+	"""
+    Build a command for running Python inside a chroot.
+
+    Args:
+        root (Path): Path to the prepared sandbox root.
+        code (str): Trusted Python code to execute.
+
+    Returns:
+        list[str]: Command arguments for chroot.
+    """
+	return [
+		"chroot",
+		str(root),
+		"/bin/python3.10",
+		"-I",
+		"-S",
+		"-c",
+		code,
+	]
+
+def build_restricted_command(command: list[str]) -> list[str]:
+	"""
+    Wrap a trusted command with Linux privilege restrictions.
+
+    Args:
+        command (list[str]): Trusted command and its arguments.
+
+    Returns:
+        list[str]: Command prefixed with privilege restrictions.
+    """
+	return [
+		"setpriv",
+		"--no-new-privs",
+		"--bounding-set=-all",
+		"--inh-caps=-all",
+		"--ambient-caps=-all",
+		*command,
+	]

@@ -1,9 +1,10 @@
 
 from pathlib import Path
-from sandbox.environment import get_python_paths, create_sandbox_directories, get_shared_libraries, prepare_library_mount_points
+from sandbox.environment import get_python_paths, create_sandbox_directories, get_shared_libraries, prepare_library_mount_points, build_chroot_command, build_restricted_command
 from sandbox.security import is_path_allowed, is_import_allowed, check_imports
 from sandbox.executor import execute_code, send_to_worker
 from sandbox.config import SandboxConfig
+from sandbox.worker import is_runtime_ready
 import sys
 
 
@@ -235,3 +236,69 @@ def test_prepare_library_mount_points(tmp_path):
     assert destination.is_file()
     assert destination.stat().st_size == 0
     assert destination == sandbox_root / source.relative_to("/")
+
+
+
+def test_build_chroot_command(tmp_path):
+    """Verify that the chroot command enables Python isolated mode."""
+
+    root = tmp_path / "sandbox-root"
+    code = 'print("Hello Agent Smith")'
+
+    command = build_chroot_command(root, code)
+
+    assert command == [
+        "chroot",
+        str(root),
+        "/bin/python3.10",
+        "-I",
+        "-S",
+        "-c",
+        code,
+    ]
+
+
+
+def test_runtime_ready(tmp_path):
+    """Verify that a prepared runtime passes the readiness check."""
+
+    root = tmp_path / "sandbox-root"
+
+    python_bin = root / "bin" / "python3.10"
+    encodings = root / "install" / "lib" / "python3.10" / "encodings"
+
+    python_bin.parent.mkdir(parents=True)
+    python_bin.touch()
+
+    encodings.mkdir(parents=True)
+
+    assert is_runtime_ready(root) is True
+
+
+def test_runtime_not_ready(tmp_path):
+    """Verify that an incomplete runtime fails the readiness check."""
+
+    root = tmp_path / "sandbox-root"
+
+    assert is_runtime_ready(root) is False
+
+
+
+def test_build_restricted_command():
+    """Verify that privilege restrictions are added to a command."""
+
+    original_command = ["python3", "--version"]
+
+    restricted_command = build_restricted_command(original_command)
+
+    assert restricted_command == [
+        "setpriv",
+        "--no-new-privs",
+        "--bounding-set=-all",
+        "--inh-caps=-all",
+        "--ambient-caps=-all",
+        "python3",
+        "--version",
+    ]
+
+    assert original_command == ["python3", "--version"]

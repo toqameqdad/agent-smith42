@@ -3,7 +3,26 @@ import json
 import sys
 
 from pydantic import ValidationError
+from pathlib import Path
 from sandbox.config import SandboxConfig
+
+
+def is_runtime_ready(root: Path) -> bool:
+    """
+    Check whether the experimental Python runtime files exist.
+
+    Args:
+        root (Path): Path to the sandbox root.
+
+    Returns:
+        bool: True if the required runtime paths exist.
+    """
+    required_paths = [
+        root / "bin" / "python3.10",
+        root / "install" / "lib" / "python3.10" / "encodings",
+    ]
+
+    return all(path.exists() for path in required_paths)
 
 
 def main() -> None:
