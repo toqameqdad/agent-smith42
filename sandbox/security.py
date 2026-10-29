@@ -1,6 +1,91 @@
 from pathlib import Path
 import ast
 import builtins
+import ctypes
+import errno
+
+
+BLOCKED_WORKER_SYSCALLS = [
+    "mount",
+    "umount2",
+    "pivot_root",
+    "chroot",
+    "unshare",
+    "setns",
+    "setuid",
+    "setgid",
+    "setresuid",
+    "setresgid",
+    "setgroups",
+    "ptrace",
+    "bpf",
+    "clone3",
+]
+
+
+class ScmpArgCmp(ctypes.Structure):
+    """Represent a syscall argument comparison for libseccomp."""
+
+    _fields_ = [
+        ("arg", ctypes.c_uint),
+        ("op", ctypes.c_int),
+        ("datum_a", ctypes.c_uint64),
+        ("datum_b", ctypes.c_uint64),
+    ]
+
+
+def add_clone_namespace_rules(lib, context: int) -> None:
+    """
+    Block clone calls that request new Linux namespaces.
+
+    Args:
+        lib: Loaded libseccomp library.
+        context (int): Active Seccomp filter context.
+
+    Raises:
+        RuntimeError: If a Seccomp rule cannot be added.
+    """
+    lib.seccomp_rule_add_array.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_uint32,
+        ctypes.c_int,
+        ctypes.c_uint,
+        ctypes.POINTER(ScmpArgCmp),
+    ]
+    lib.seccomp_rule_add_array.restype = ctypes.c_int
+
+    lib.seccomp_syscall_resolve_name.argtypes = [ctypes.c_char_p]
+    lib.seccomp_syscall_resolve_name.restype = ctypes.c_int
+
+    clone_number = lib.seccomp_syscall_resolve_name(b"clone")
+
+    if clone_number < 0:
+        raise RuntimeError("Cannot resolve clone syscall")
+
+    SCMP_CMP_MASKED_EQ = 7
+    deny = 0x00050000 | errno.EPERM
+
+    for flag in get_namespace_clone_flag_values():
+        comparison = ScmpArgCmp(
+            arg=0,
+            op=SCMP_CMP_MASKED_EQ,
+            datum_a=flag,
+            datum_b=flag,
+        )
+
+        result = lib.seccomp_rule_add_array(
+            context,
+            deny,
+            clone_number,
+            1,
+            ctypes.byref(comparison),
+        )
+
+        if result != 0:
+            raise RuntimeError(
+                f"Failed to block clone flag {hex(flag)}: {result}"
+            )
+
 
 def create_safe_builtins() -> dict:
     """
@@ -125,3 +210,118 @@ def check_imports(
                 return False
 
     return True
+
+
+
+def apply_seccomp_filter(blocked_syscalls: list[str]) -> None:
+    """
+    Apply a Seccomp filter that denies selected Linux system calls.
+
+    Args:
+        blocked_syscalls (list[str]): System call names to deny.
+
+    Raises:
+        RuntimeError: If filter creation or installation fails.
+    """
+    lib = ctypes.CDLL("libseccomp.so.2", use_errno=True)
+
+    lib.seccomp_init.argtypes = [ctypes.c_uint32]
+    lib.seccomp_init.restype = ctypes.c_void_p
+
+    lib.seccomp_syscall_resolve_name.argtypes = [ctypes.c_char_p]
+    lib.seccomp_syscall_resolve_name.restype = ctypes.c_int
+
+    lib.seccomp_rule_add.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_uint32,
+        ctypes.c_int,
+        ctypes.c_uint,
+    ]
+    lib.seccomp_rule_add.restype = ctypes.c_int
+
+    lib.seccomp_load.argtypes = [ctypes.c_void_p]
+    lib.seccomp_load.restype = ctypes.c_int
+
+    lib.seccomp_release.argtypes = [ctypes.c_void_p]
+    lib.seccomp_release.restype = None
+
+    allow = 0x7FFF0000
+    deny = 0x00050000 | errno.EPERM
+
+    context = lib.seccomp_init(allow)
+    if not context:
+        raise RuntimeError("Failed to initialize Seccomp")
+
+    try:
+        for name in blocked_syscalls:
+            syscall = lib.seccomp_syscall_resolve_name(
+                name.encode("ascii")
+            )
+
+            if syscall < 0:
+                raise RuntimeError(f"Unknown syscall: {name}")
+
+            result = lib.seccomp_rule_add(
+                context, deny, syscall, 0
+            )
+
+            if result != 0:
+                raise RuntimeError(
+                    f"Failed to block {name}: {result}"
+                )
+
+        add_clone_namespace_rules(lib, context)
+        result = lib.seccomp_load(context)
+
+        if result != 0:
+            raise RuntimeError(
+                f"Failed to install Seccomp: {result}"
+            )
+
+    finally:
+        lib.seccomp_release(context)
+
+
+
+def get_namespace_clone_flags() -> int:
+    """
+    Return Linux clone flags used to create new namespaces.
+
+    Returns:
+        int: Bitmask of namespace creation flags.
+    """
+    clone_newns = 0x00020000
+    clone_newcgroup = 0x02000000
+    clone_newuts = 0x04000000
+    clone_newipc = 0x08000000
+    clone_newuser = 0x10000000
+    clone_newpid = 0x20000000
+    clone_newnet = 0x40000000
+
+    return (
+        clone_newns
+        | clone_newcgroup
+        | clone_newuts
+        | clone_newipc
+        | clone_newuser
+        | clone_newpid
+        | clone_newnet
+    )
+
+
+def get_namespace_clone_flag_values() -> list[int]:
+    """
+    Return individual Linux namespace creation flags for clone.
+
+    Returns:
+        list[int]: Individual namespace creation flag values.
+    """
+    return [
+        0x00020000,  # CLONE_NEWNS
+        0x02000000,  # CLONE_NEWCGROUP
+        0x04000000,  # CLONE_NEWUTS
+        0x08000000,  # CLONE_NEWIPC
+        0x10000000,  # CLONE_NEWUSER
+        0x20000000,  # CLONE_NEWPID
+        0x40000000,  # CLONE_NEWNET
+    ]

@@ -302,3 +302,171 @@ def test_build_restricted_command():
     ]
 
     assert original_command == ["python3", "--version"]
+
+
+
+def test_seccomp_filter():
+    """Verify that Seccomp blocks a syscall in a child process."""
+    import subprocess
+    import sys
+    import textwrap
+
+    code = textwrap.dedent("""
+        import ctypes
+        import errno
+
+        from sandbox.security import apply_seccomp_filter
+
+        libseccomp = ctypes.CDLL("libseccomp.so.2")
+        libseccomp.seccomp_syscall_resolve_name.argtypes = [
+            ctypes.c_char_p
+        ]
+        libseccomp.seccomp_syscall_resolve_name.restype = ctypes.c_int
+
+        syscall_number = libseccomp.seccomp_syscall_resolve_name(
+            b"getppid"
+        )
+
+        assert syscall_number >= 0
+
+        apply_seccomp_filter(["getppid"])
+
+        libc = ctypes.CDLL(None, use_errno=True)
+        libc.syscall.argtypes = [ctypes.c_long]
+        libc.syscall.restype = ctypes.c_long
+
+        ctypes.set_errno(0)
+        result = libc.syscall(syscall_number)
+        error = ctypes.get_errno()
+
+        print("Result:", result)
+        print("Errno:", error)
+
+        assert result == -1
+        assert error == errno.EPERM
+
+        print("Seccomp test passed")
+    """)
+
+    result = subprocess.run(
+        [sys.executable, "-c", code],
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+
+    assert result.returncode == 0, (
+        f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+    )
+    assert "Seccomp test passed" in result.stdout
+
+
+def test_worker_seccomp_policy():
+    """Verify that the worker policy blocks namespace creation."""
+    import subprocess
+    import sys
+    import textwrap
+
+    code = textwrap.dedent("""
+        import ctypes
+        import errno
+
+        from sandbox.security import (
+            BLOCKED_WORKER_SYSCALLS,
+            apply_seccomp_filter,
+        )
+
+        libseccomp = ctypes.CDLL("libseccomp.so.2")
+        libseccomp.seccomp_syscall_resolve_name.argtypes = [
+            ctypes.c_char_p
+        ]
+        libseccomp.seccomp_syscall_resolve_name.restype = ctypes.c_int
+
+        syscall_number = libseccomp.seccomp_syscall_resolve_name(
+            b"unshare"
+        )
+        assert syscall_number >= 0
+
+        apply_seccomp_filter(BLOCKED_WORKER_SYSCALLS)
+
+        libc = ctypes.CDLL(None, use_errno=True)
+        libc.syscall.restype = ctypes.c_long
+
+        ctypes.set_errno(0)
+        result = libc.syscall(syscall_number, 0)
+        error = ctypes.get_errno()
+
+        assert result == -1
+        assert error == errno.EPERM
+
+        print("Worker Seccomp policy test passed")
+    """)
+
+    result = subprocess.run(
+        [sys.executable, "-c", code],
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+
+    assert result.returncode == 0, (
+        f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+    )
+    assert "Worker Seccomp policy test passed" in result.stdout
+
+
+def test_seccomp_denial_is_effective():
+    """Verify that Seccomp changes an allowed syscall into a denied one."""
+    import subprocess
+    import sys
+    import textwrap
+
+    code = textwrap.dedent("""
+        import ctypes
+        import errno
+
+        from sandbox.security import apply_seccomp_filter
+
+        libseccomp = ctypes.CDLL("libseccomp.so.2")
+
+        libseccomp.seccomp_syscall_resolve_name.argtypes = [
+            ctypes.c_char_p
+        ]
+        libseccomp.seccomp_syscall_resolve_name.restype = ctypes.c_int
+
+        syscall_number = libseccomp.seccomp_syscall_resolve_name(
+            b"getppid"
+        )
+        assert syscall_number >= 0
+
+        libc = ctypes.CDLL(None, use_errno=True)
+        libc.syscall.argtypes = [ctypes.c_long]
+        libc.syscall.restype = ctypes.c_long
+
+        # Before the filter, the syscall should succeed.
+        ctypes.set_errno(0)
+        before = libc.syscall(syscall_number)
+        assert before > 0
+
+        # Install the filter in this child process only.
+        apply_seccomp_filter(["getppid"])
+
+        ctypes.set_errno(0)
+        after = libc.syscall(syscall_number)
+        error = ctypes.get_errno()
+
+        assert after == -1
+        assert error == errno.EPERM
+
+        print("Seccomp denial verified")
+    """)
+
+    result = subprocess.run(
+        [sys.executable, "-c", code],
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "Seccomp denial verified" in result.stdout
