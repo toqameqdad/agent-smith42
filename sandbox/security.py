@@ -19,7 +19,6 @@ BLOCKED_WORKER_SYSCALLS = [
     "setgroups",
     "ptrace",
     "bpf",
-    "clone3",
 ]
 
 
@@ -213,7 +212,11 @@ def check_imports(
 
 
 
-def apply_seccomp_filter(blocked_syscalls: list[str]) -> None:
+def apply_seccomp_filter(
+    blocked_syscalls: list[str],
+    block_namespace_clone: bool = False,
+    enosys_syscalls: list[str] | None = None,
+    ) -> None:
     """
     Apply a Seccomp filter that denies selected Linux system calls.
 
@@ -270,7 +273,28 @@ def apply_seccomp_filter(blocked_syscalls: list[str]) -> None:
                     f"Failed to block {name}: {result}"
                 )
 
-        add_clone_namespace_rules(lib, context)
+        for name in enosys_syscalls or []:
+            syscall = lib.seccomp_syscall_resolve_name(
+                name.encode("ascii")
+            )
+
+            if syscall < 0:
+                raise RuntimeError(f"Unknown syscall: {name}")
+
+            result = lib.seccomp_rule_add(
+                context,
+                0x00050000 | errno.ENOSYS,
+                syscall,
+                0,
+            )
+
+            if result != 0:
+                raise RuntimeError(
+                    f"Failed to disable {name}: {result}"
+                )
+
+        if block_namespace_clone:
+            add_clone_namespace_rules(lib, context)
         result = lib.seccomp_load(context)
 
         if result != 0:
@@ -325,3 +349,15 @@ def get_namespace_clone_flag_values() -> list[int]:
         0x20000000,  # CLONE_NEWPID
         0x40000000,  # CLONE_NEWNET
     ]
+
+
+
+def apply_worker_seccomp_policy() -> None:
+    """
+    Apply the experimental Seccomp policy for the sandbox worker.
+    """
+    apply_seccomp_filter(
+        blocked_syscalls=BLOCKED_WORKER_SYSCALLS,
+        block_namespace_clone=True,
+        enosys_syscalls=["clone3"],
+    )

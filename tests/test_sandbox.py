@@ -1,7 +1,7 @@
 
 from pathlib import Path
 from sandbox.environment import get_python_paths, create_sandbox_directories, get_shared_libraries, prepare_library_mount_points, build_chroot_command, build_restricted_command
-from sandbox.security import is_path_allowed, is_import_allowed, check_imports
+from sandbox.security import is_path_allowed, is_import_allowed, check_imports, apply_worker_seccomp_policy 
 from sandbox.executor import execute_code, send_to_worker
 from sandbox.config import SandboxConfig
 from sandbox.worker import is_runtime_ready
@@ -371,10 +371,7 @@ def test_worker_seccomp_policy():
         import ctypes
         import errno
 
-        from sandbox.security import (
-            BLOCKED_WORKER_SYSCALLS,
-            apply_seccomp_filter,
-        )
+        from sandbox.security import apply_worker_seccomp_policy
 
         libseccomp = ctypes.CDLL("libseccomp.so.2")
         libseccomp.seccomp_syscall_resolve_name.argtypes = [
@@ -387,7 +384,7 @@ def test_worker_seccomp_policy():
         )
         assert syscall_number >= 0
 
-        apply_seccomp_filter(BLOCKED_WORKER_SYSCALLS)
+        apply_worker_seccomp_policy()
 
         libc = ctypes.CDLL(None, use_errno=True)
         libc.syscall.restype = ctypes.c_long
@@ -470,3 +467,101 @@ def test_seccomp_denial_is_effective():
 
     assert result.returncode == 0, result.stderr
     assert "Seccomp denial verified" in result.stdout
+
+
+
+def test_clone_namespace_seccomp_rule():
+    """Verify that Seccomp blocks clone calls requesting namespaces."""
+    import subprocess
+    import sys
+    import textwrap
+
+    code = textwrap.dedent("""
+        import ctypes
+        import errno
+
+        from sandbox.security import apply_worker_seccomp_policy
+
+        libseccomp = ctypes.CDLL("libseccomp.so.2")
+        libseccomp.seccomp_syscall_resolve_name.argtypes = [
+            ctypes.c_char_p
+        ]
+        libseccomp.seccomp_syscall_resolve_name.restype = ctypes.c_int
+
+        clone_number = libseccomp.seccomp_syscall_resolve_name(
+            b"clone"
+        )
+        assert clone_number >= 0
+
+        libc = ctypes.CDLL(None, use_errno=True)
+        libc.syscall.restype = ctypes.c_long
+
+        apply_worker_seccomp_policy()
+
+        # CLONE_NEWUSER | SIGCHLD
+        flags = 0x10000000 | 17
+
+        ctypes.set_errno(0)
+        result = libc.syscall(clone_number, flags, 0, 0, 0, 0)
+        error = ctypes.get_errno()
+
+        assert result == -1
+        assert error == errno.EPERM
+
+        print("Clone namespace rule passed")
+    """)
+
+    result = subprocess.run(
+        [sys.executable, "-c", code],
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+
+    assert result.returncode == 0, (
+        f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+    )
+    assert "Clone namespace rule passed" in result.stdout
+
+
+
+def test_seccomp_allows_normal_threads():
+    """Verify that normal Python threads work after applying Seccomp."""
+    import subprocess
+    import sys
+    import textwrap
+
+    code = textwrap.dedent("""
+        import threading
+
+        from sandbox.security import apply_worker_seccomp_policy
+
+        # Install the experimental worker filter.
+        apply_worker_seccomp_policy()
+
+        results = []
+
+        def worker():
+            results.append(42)
+
+        thread = threading.Thread(target=worker)
+        thread.start()
+        thread.join(timeout=5)
+
+        assert not thread.is_alive()
+        assert results == [42]
+
+        print("Normal threads work")
+    """)
+
+    result = subprocess.run(
+        [sys.executable, "-c", code],
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+
+    assert result.returncode == 0, (
+        f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+    )
+    assert "Normal threads work" in result.stdout
