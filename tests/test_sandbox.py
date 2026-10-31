@@ -565,3 +565,66 @@ def test_seccomp_allows_normal_threads():
         f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
     )
     assert "Normal threads work" in result.stdout
+
+
+def test_check_imports_multiple_allowed():
+    allowed = ["math", "json"]
+
+    assert check_imports(
+        "import math, json",
+        allowed
+    ) is True
+
+
+def test_check_imports_from_allowed_submodule():
+    allowed = ["collections.*"]
+
+    assert check_imports(
+        "from collections.abc import Sequence",
+        allowed
+    ) is True
+
+
+def test_check_imports_relative_import():
+    allowed = ["math", "json"]
+
+    assert check_imports(
+        "from .helpers import something",
+        allowed
+    ) is False
+
+
+def test_check_imports_dynamic_import():
+    allowed = ["math"]
+
+    assert check_imports(
+        "__import__('os')",
+        allowed
+    ) is False
+
+
+def test_check_imports_importlib():
+    allowed = ["math"]
+
+    assert check_imports(
+        "import importlib",
+        allowed
+    ) is False
+
+
+def test_check_imports_builtins_import():
+    allowed = ["math"]
+
+    assert check_imports(
+        'import builtins\nbuiltins.__import__("os")',
+        allowed
+    ) is False
+
+
+def test_check_imports_getattr():
+    allowed = ["math"]
+
+    assert check_imports(
+        'getattr(__builtins__, "__import__")("os")',
+        allowed
+    ) is False

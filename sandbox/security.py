@@ -178,25 +178,22 @@ def check_imports(
     authorized_imports: list[str]
 ) -> bool:
     """
-    Check whether all direct imports in Python code are allowed.
-
-    Args:
-        code (str): Python source code to inspect.
-        authorized_imports (list[str]): Allowed module names.
-
-    Returns:
-        bool: True if all direct imports are allowed,
-        False otherwise.
+    Check whether imports in Python code are allowed.
     """
+
     try:
         tree = ast.parse(code)
     except SyntaxError:
         return False
 
     for node in ast.walk(tree):
+
         if isinstance(node, ast.Import):
             for alias in node.names:
-                if not is_import_allowed(alias.name, authorized_imports):
+                if not is_import_allowed(
+                    alias.name,
+                    authorized_imports
+                ):
                     return False
 
         elif isinstance(node, ast.ImportFrom):
@@ -205,8 +202,27 @@ def check_imports(
             if node.level != 0:
                 return False
 
-            if not is_import_allowed(module_name, authorized_imports):
+            if not is_import_allowed(
+                module_name,
+                authorized_imports
+            ):
                 return False
+
+        elif isinstance(node, ast.Call):
+
+            # Block __import__()
+            if isinstance(node.func, ast.Name):
+                if node.func.id == "__import__":
+                    return False
+
+            # Block importlib.import_module()
+            if isinstance(node.func, ast.Attribute):
+                if (
+                    node.func.attr == "import_module"
+                    and isinstance(node.func.value, ast.Name)
+                    and node.func.value.id == "importlib"
+                ):
+                    return False
 
     return True
 
