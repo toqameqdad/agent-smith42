@@ -350,7 +350,7 @@ def _serve_interactive_worker() -> None:
                     response_line = json.dumps({
                         "status": "error",
                         "message": error or "Sandbox process exited.",
-                    }) + "\\n"
+                    }) + "\n"
                     sys.stdout.write(response_line)
                     sys.stdout.flush()
                     break
