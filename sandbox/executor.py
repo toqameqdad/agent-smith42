@@ -193,20 +193,20 @@ class SandboxSession:
             self.process.stdin.write(json.dumps(request) + "\n")
             self.process.stdin.flush()
 
-            ready, _, _ = select.select(
-                [self.process.stdout],
-                [],
-                [],
-                self.config.max_execution_time_seconds,
-            )
-            if not ready:
-                self._terminate()
-                return {
-                    "status": "error",
-                    "message": "Execution timed out.",
-                }
-
             while True:
+                ready, _, _ = select.select(
+                    [self.process.stdout],
+                    [],
+                    [],
+                    self.config.max_execution_time_seconds,
+                )
+                if not ready:
+                    self._terminate()
+                    return {
+                        "status": "error",
+                        "message": "Execution timed out.",
+                    }
+
                 response_line = self.process.stdout.readline()
                 if not response_line:
                     error = self.process.stderr.read().strip()
