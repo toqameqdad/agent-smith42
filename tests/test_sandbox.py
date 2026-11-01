@@ -1195,3 +1195,52 @@ def test_mcp_discovery_does_not_hide_transport_errors():
         assert str(error) == "MCP transport failed"
     else:
         raise AssertionError("MCP discovery silently hid a transport failure")
+
+
+def test_mcp_stdio_client_end_to_end(tmp_path):
+    """Verify stdio discovery and tool/resource/prompt calls against a real MCP server."""
+    import sys
+    from sandbox.mcp_client import MCPClient
+
+    server_file = tmp_path / "mcp_server.py"
+    server_file.write_text(
+        "from mcp.server import MCPServer\n"
+        "mcp = MCPServer('Agent Smith test server')\n"
+        "@mcp.tool()\n"
+        "def add(a: int, b: int) -> int:\n"
+        "    return a + b\n"
+        "@mcp.resource('demo://status')\n"
+        "def status() -> str:\n"
+        "    return 'ready'\n"
+        "@mcp.prompt()\n"
+        "def review(topic: str) -> str:\n"
+        "    return f'Review {topic}'\n"
+        "if __name__ == '__main__':\n"
+        "    mcp.run()\n",
+        encoding="utf-8",
+    )
+
+    with MCPClient(
+        stdio_command=f'"{sys.executable}" "{server_file}"'
+    ) as client:
+        assert [tool["name"] for tool in client.tools] == ["add"]
+        assert any(item.get("uri") == "demo://status" for item in client.resources)
+        assert any(item.get("name") == "review" for item in client.prompts)
+
+        tool_result = client.handle_call(
+            "call_tool",
+            {"name": "add", "arguments": {"a": 2, "b": 3}},
+        )
+        assert tool_result["structuredContent"]["result"] == 5
+
+        resource_result = client.handle_call(
+            "read_resource",
+            {"uri": "demo://status"},
+        )
+        assert resource_result["contents"][0]["text"] == "ready"
+
+        prompt_result = client.handle_call(
+            "get_prompt",
+            {"name": "review", "arguments": {"topic": "sandbox"}},
+        )
+        assert "Review sandbox" in prompt_result["messages"][0]["content"]["text"]
