@@ -87,6 +87,7 @@ def execute_in_sandbox(
 
         mount_runtime_libraries(SANDBOX_ROOT)
 
+        code = "import ctypes; ctypes.CDLL('libseccomp.so.2); print('libseccomp loaded')"
         command = build_chroot_command(SANDBOX_ROOT, code)
         result = subprocess.run(
             command,
