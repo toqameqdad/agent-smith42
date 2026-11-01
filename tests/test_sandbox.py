@@ -859,12 +859,13 @@ def test_seccomp_bootstrap_structure():
     assert "sys.stdin.read()" in bootstrap
     assert "set_no_new_privs" in bootstrap
     assert "seccomp_load" in bootstrap
+    assert "apply_landlock" in bootstrap
     assert "exec(" in bootstrap
 
 
 
 def test_landlock_restricts_filesystem_access(tmp_path):
-    """Verify Landlock permits the allowlist and blocks other filesystem paths."""
+    """Verify Landlock enforces the filesystem allowlist."""
     import subprocess
     import textwrap
 
@@ -923,7 +924,7 @@ def test_landlock_restricts_filesystem_access(tmp_path):
     )
 
     assert result.returncode == 0, (
-        f"STDOUT:\\n{result.stdout}\\nSTDERR:\\n{result.stderr}"
+        f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
     )
     assert "Landlock filesystem restrictions passed" in result.stdout
     assert (allowed_dir / "created.txt").read_text() == "created"
