@@ -90,6 +90,18 @@ def prepare_python_runtime(root: str | Path) -> Path:
         ),
     )
 
+    install_prefix = root / "install"
+
+    if install_prefix.is_symlink():
+        if install_prefix.resolve() != root.resolve():
+            install_prefix.unlink()
+            install_prefix.symlink_to(".")
+    elif install_prefix.exists():
+        raise FileExistsError(
+            f"Cannot create Python prefix symlink: {install_prefix}"
+        )
+    else:
+        install_prefix.symlink_to(".")
     return root
 
     
