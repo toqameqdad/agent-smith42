@@ -19,10 +19,16 @@ def is_runtime_ready(root: Path) -> bool:
     """
     required_paths = [
         root / "bin" / "python3.10",
-        root / "install" / "lib" / "python3.10" / "encodings",
+        root / "lib" / "python3.10" / "encodings",
+        root / "lib" / "python3.10" / "lib-dynload",
     ]
 
-    return all(path.exists() for path in required_paths)
+    return (
+        all(path.exists() for path in required_paths)
+        and (root / "bin" / "python3.10").is_file()
+        and (root / "lib" / "python3.10" / "encodings").is_dir()
+        and (root / "lib" / "python3.10" / "lib-dynload").is_dir()
+    )
 
 
 def main() -> None:

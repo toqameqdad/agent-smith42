@@ -1,6 +1,14 @@
 
 from pathlib import Path
-from sandbox.environment import get_python_paths, create_sandbox_directories, get_shared_libraries, prepare_library_mount_points, build_chroot_command, build_restricted_command
+from sandbox.environment import (
+    get_python_paths,
+    create_sandbox_directories,
+    prepare_python_runtime,
+    get_shared_libraries,
+    prepare_library_mount_points,
+    build_chroot_command,
+    build_restricted_command,
+)
 from sandbox.security import is_path_allowed, is_import_allowed, check_imports, apply_worker_seccomp_policy 
 from sandbox.executor import execute_code, send_to_worker
 from sandbox.config import SandboxConfig
@@ -265,12 +273,14 @@ def test_runtime_ready(tmp_path):
     root = tmp_path / "sandbox-root"
 
     python_bin = root / "bin" / "python3.10"
-    encodings = root / "install" / "lib" / "python3.10" / "encodings"
+    encodings = root / "lib" / "python3.10" / "encodings"
+    lib_dynload = root / "lib" / "python3.10" / "lib-dynload"
 
     python_bin.parent.mkdir(parents=True)
     python_bin.touch()
 
     encodings.mkdir(parents=True)
+    lib_dynload.mkdir(parents=True)
 
     assert is_runtime_ready(root) is True
 
@@ -628,3 +638,18 @@ def test_check_imports_getattr():
         'getattr(__builtins__, "__import__")("os")',
         allowed
     ) is False
+
+
+def test_prepare_python_runtime(tmp_path):
+    """Verify that Python runtime files are copied into the sandbox."""
+
+    root = tmp_path / "sandbox-root"
+
+    prepare_python_runtime(root)
+
+    assert (root / "bin" / "python3.10").is_file()
+    assert (root / "lib" / "python3.10" / "encodings").is_dir()
+    assert (root / "lib" / "python3.10" / "lib-dynload").is_dir()
+    assert not (
+        root / "lib" / "python3.10" / "site-packages"
+    ).exists()

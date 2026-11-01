@@ -223,7 +223,18 @@ def check_imports(
                     and node.func.value.id == "importlib"
                 ):
                     return False
-
+                    
+            if (
+                isinstance(node.func, ast.Name)
+                and node.func.id == "getattr"
+                and len(node.args) >= 2
+                and isinstance(node.args[1], ast.Constant)
+                and node.args[1].value in [
+                    "__import__",
+                    "import_module",
+                ]
+            ):
+                return False
     return True
 
 

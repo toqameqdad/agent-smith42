@@ -2,6 +2,7 @@
 import sys
 import sysconfig
 import subprocess
+import shutil
 from pathlib import Path
 
 
@@ -41,6 +42,57 @@ def create_sandbox_directories(root: str | Path) -> Path:
     return root
 
 
+def prepare_python_runtime(root: str | Path) -> Path:
+    """
+    Prepare an isolated Python runtime inside the sandbox.
+
+    Args:
+        root: Path to the sandbox root.
+
+    Returns:
+        Path: The prepared sandbox root.
+    """
+    root = create_sandbox_directories(root)
+    paths = get_python_paths()
+
+    base_prefix = Path(paths["base_prefix"])
+    stdlib = Path(paths["stdlib"])
+
+    python_source = base_prefix / "bin" / "python3.10"
+    python_destination = root / "bin" / "python3.10"
+
+    library_destination = root / "lib" / "python3.10"
+
+    if not python_source.is_file():
+        raise FileNotFoundError(
+            f"Python executable not found: {python_source}"
+        )
+
+    if not stdlib.is_dir():
+        raise FileNotFoundError(
+            f"Python standard library not found: {stdlib}"
+        )
+
+    shutil.copy2(
+        python_source,
+        python_destination,
+        follow_symlinks=False,
+    )
+
+    shutil.copytree(
+        stdlib,
+        library_destination,
+        symlinks=True,
+        dirs_exist_ok=True,
+        ignore=shutil.ignore_patterns(
+            "site-packages",
+            "__pycache__",
+        ),
+    )
+
+    return root
+
+    
 def get_shared_libraries(executable: str) -> list[str]:
     """
     Discover shared library paths required by an executable.
