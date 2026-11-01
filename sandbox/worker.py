@@ -341,20 +341,34 @@ def _serve_interactive_worker() -> None:
         for line in sys.stdin:
             child.stdin.write(line)
             child.stdin.flush()
-            response_line = child.stdout.readline()
-            if not response_line:
-                error = child.stderr.read().strip()
-                response_line = json.dumps({
-                    "status": "error",
-                    "message": error or "Sandbox process exited.",
-                }) + "\n"
+            is_close = json.loads(line).get("command") == "close"
+
+            while True:
+                response_line = child.stdout.readline()
+                if not response_line:
+                    error = child.stderr.read().strip()
+                    response_line = json.dumps({
+                        "status": "error",
+                        "message": error or "Sandbox process exited.",
+                    }) + "\\n"
+                    sys.stdout.write(response_line)
+                    sys.stdout.flush()
+                    break
+
+                response = json.loads(response_line)
                 sys.stdout.write(response_line)
                 sys.stdout.flush()
+
+                if response.get("status") == "mcp_call":
+                    mcp_response = sys.stdin.readline()
+                    if not mcp_response:
+                        break
+                    child.stdin.write(mcp_response)
+                    child.stdin.flush()
+                    continue
                 break
 
-            sys.stdout.write(response_line)
-            sys.stdout.flush()
-            if json.loads(line).get("command") == "close":
+            if is_close or not response_line:
                 break
 
         child.stdin.close()
