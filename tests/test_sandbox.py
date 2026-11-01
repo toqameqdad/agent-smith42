@@ -294,7 +294,7 @@ def test_worker_communication():
         config
     )
 
-    assert response["status"] == "success"
+    assert response["status"] == "success", response
     assert response["output"] == "10\n"
 
 
