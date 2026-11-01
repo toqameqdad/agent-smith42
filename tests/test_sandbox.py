@@ -17,7 +17,7 @@ from sandbox.security import (
 )
 from sandbox.executor import execute_code, send_to_worker
 from sandbox.config import SandboxConfig
-from sandbox.worker import is_runtime_ready
+from sandbox.worker import is_runtime_ready, mount_runtime_libraries
 import sys
 
 
@@ -353,6 +353,7 @@ def test_build_chroot_command(tmp_path):
         "/bin/python3.10",
         "-I",
         "-S",
+        "-B",
         "-c",
         code,
     ]
@@ -369,6 +370,73 @@ def test_build_chroot_command_with_bootstrap(tmp_path):
     assert command[-2:] == ["-c", bootstrap]
     assert command[0] == "chroot"
     assert command[1] == str(root)
+
+
+def test_mount_runtime_libraries_sets_read_only_root_and_writable_allowlist(
+    tmp_path, monkeypatch
+):
+    """Verify mount order leaves only configured directories writable."""
+    import sandbox.worker as worker
+
+    root = tmp_path / "runtime"
+    (root / "bin").mkdir(parents=True)
+    (root / "bin" / "python3.10").touch()
+    (root / "testbed").mkdir()
+    (root / "tmp" / "agent").mkdir(parents=True)
+
+    library = tmp_path / "libexample.so"
+    library.touch()
+
+    commands = []
+    monkeypatch.setattr(
+        worker, "get_shared_libraries", lambda _executable: [str(library)]
+    )
+    monkeypatch.setattr(
+        worker,
+        "_run_mount_command",
+        lambda arguments: commands.append(arguments),
+    )
+
+    mount_runtime_libraries(root, ["/testbed", "/tmp/agent"])
+
+    assert ["--bind", str(root.resolve()), str(root.resolve())] in commands
+    assert [
+        "-o", "remount,bind,ro",
+        str(root.resolve() / "lib" / "libexample.so"),
+    ] in commands
+    assert [
+        "-o", "remount,bind,ro", str(root.resolve())
+    ] in commands
+    assert [
+        "-o", "remount,bind,rw", str(root.resolve() / "testbed")
+    ] in commands
+    assert [
+        "-o", "remount,bind,rw", str(root.resolve() / "tmp" / "agent")
+    ] in commands
+
+
+def test_mount_runtime_libraries_rejects_paths_outside_root(
+    tmp_path, monkeypatch
+):
+    """Reject configured writable paths that escape the chroot root."""
+    import sandbox.worker as worker
+
+    root = tmp_path / "runtime"
+    (root / "bin").mkdir(parents=True)
+    (root / "bin" / "python3.10").touch()
+    (root / "testbed").mkdir()
+    outside = tmp_path / "outside"
+    outside.mkdir()
+
+    monkeypatch.setattr(worker, "get_shared_libraries", lambda _exe: [])
+    monkeypatch.setattr(worker, "_run_mount_command", lambda _args: None)
+
+    try:
+        mount_runtime_libraries(root, [str(outside)])
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("Outside writable directory should be rejected")
 
 
 def test_runtime_ready(tmp_path):
