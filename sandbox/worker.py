@@ -56,6 +56,7 @@ def mount_runtime_libraries(root: Path) -> None:
     python_executable = root / "bin" / "python3.10"
 
     libraries = get_shared_libraries(str(python_executable))
+    libraries.append("/lib/x86_64-linux-gnu/libseccomp.so.2")
     mount_points = prepare_library_mount_points(root, libraries)
 
     for source, destination in mount_points:
