@@ -1113,3 +1113,34 @@ def test_mcp_discovery_reads_all_pages():
     tools = asyncio.run(client._safe_list("list_tools", "tools"))
 
     assert [tool["name"] for tool in tools] == ["first", "second"]
+
+
+
+def test_one_shot_final_answer_is_captured():
+    """Verify final_answer stops execution and emits the worker protocol marker."""
+    import subprocess
+    import textwrap
+
+    security_source = (
+        "def apply_worker_seccomp_policy(): pass\n"
+        "def apply_landlock(*args): pass\n"
+        "def create_safe_builtins(*args): return __builtins__\n"
+    )
+    code = textwrap.dedent(
+        "from sandbox.bootstrap import run\n"
+        f"security_source = {security_source!r}\n"
+        "run('print(\"before\'); final_answer(\"finished\'); print(\"after\")', "
+        "security_source, [], [])\n"
+    )
+
+    result = subprocess.run(
+        [sys.executable, "-c", code],
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "before" in result.stdout
+    assert "__AGENT_SMITH_FINAL_ANSWER__: \"finished\"" in result.stdout
+    assert "after" not in result.stdout
