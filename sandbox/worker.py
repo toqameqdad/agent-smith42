@@ -103,7 +103,19 @@ def mount_runtime_libraries(
 
     python_executable = root / "bin" / "python3.10"
     libraries = get_shared_libraries(str(python_executable))
-    seccomp_library = "/lib/x86_64-linux-gnu/libseccomp.so.2"
+    seccomp_candidates = [
+        *Path("/lib").glob("*/libseccomp.so.2"),
+        *Path("/usr/lib").glob("*/libseccomp.so.2"),
+        Path("/lib") / "libseccomp.so.2",
+        Path("/usr/lib") / "libseccomp.so.2",
+    ]
+    seccomp_library = next(
+        (str(path) for path in seccomp_candidates if path.is_file()),
+        None,
+    )
+    if seccomp_library is None:
+        raise FileNotFoundError("libseccomp.so.2 was not found.")
+
     if seccomp_library not in libraries:
         libraries.append(seccomp_library)
 
