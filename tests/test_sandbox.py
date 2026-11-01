@@ -1143,3 +1143,35 @@ def test_one_shot_final_answer_is_captured():
     assert "before" in result.stdout
     assert '__AGENT_SMITH_FINAL_ANSWER__:"finished"' in result.stdout
     assert "after" not in result.stdout
+
+
+def test_repl_stops_after_final_answer(monkeypatch):
+    """Verify final_answer ends the interactive task instead of reading more input."""
+    import builtins
+    from types import SimpleNamespace
+    from sandbox.__main__ import run_repl
+
+    class FakeSession:
+        def __init__(self, *args, **kwargs):
+            self.process = SimpleNamespace(poll=lambda: None)
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return None
+
+        def execute(self, code):
+            assert code == "final_answer('finished')"
+            return {
+                "status": "final_answer",
+                "answer": "finished",
+                "output": "",
+            }
+
+    inputs = iter(["final_answer('finished')", "this must not be read"])
+    monkeypatch.setattr("sandbox.__main__.SandboxSession", FakeSession)
+    monkeypatch.setattr(builtins, "input", lambda prompt: next(inputs))
+
+    assert run_repl(SandboxConfig()) == 0
+    assert next(inputs) == "this must not be read"
