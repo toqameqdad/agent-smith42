@@ -40,7 +40,7 @@ uv run sandbox
 Load a custom JSON configuration:
 
 ```bash
-uv run sandbox config/sandbox_template.json
+uv run sandbox sandbox_template.json
 ```
 
 The REPL keeps one Python namespace between entries. Enter `exit` or press Ctrl+D to leave.
@@ -50,7 +50,7 @@ The REPL keeps one Python namespace between entries. Enter `exit` or press Ctrl+
 Connect to a server launched through stdio:
 
 ```bash
-uv run sandbox --mcp-stdio "python path/to/mcp_server.py" config/sandbox_template.json
+uv run sandbox --mcp-stdio "python path/to/mcp_server.py" sandbox_template.json
 ```
 
 Connect to a Streamable HTTP MCP server:
