@@ -132,6 +132,15 @@ def get_shared_libraries(executable: str) -> list[str]:
         elif parts and parts[0].startswith("/"):
             libraries.append(parts[0])
 
+    # Python builds configured with --enable-shared may need libpython
+    # at runtime even when ldd does not report it as a resolved dependency.
+    library_name = sysconfig.get_config_var("LDLIBRARY")
+    library_directory = sysconfig.get_config_var("LIBDIR")
+    if library_name and library_directory:
+        python_library = Path(library_directory) / library_name
+        if python_library.is_file():
+            libraries.append(str(python_library))
+
     return libraries
 
 
