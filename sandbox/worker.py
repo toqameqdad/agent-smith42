@@ -260,6 +260,8 @@ def build_interactive_bootstrap_code(
 
     return (
         "import contextlib, io, json, sys\n"
+        "protocol_stdout = sys.stdout\n"
+        "protocol_stdin = sys.stdin\n"
         f"bootstrap_source = {bootstrap_source!r}\n"
         f"security_source = {security_source!r}\n"
         f"authorized_imports = {authorized_imports!r}\n"
@@ -279,9 +281,9 @@ def build_interactive_bootstrap_code(
         "user_namespace['final_answer'] = final_answer\n"
         "user_namespace['sandbox_manual'] = mcp_manual\n"
         "def _mcp_request(method, params):\n"
-        "    sys.stdout.write(json.dumps({'status': 'mcp_call', 'method': method, 'params': params}) + '\\n')\n"
-        "    sys.stdout.flush()\n"
-        "    response = json.loads(sys.stdin.readline())\n"
+        "    protocol_stdout.write(json.dumps({'status': 'mcp_call', 'method': method, 'params': params}) + '\\n')\n"
+        "    protocol_stdout.flush()\n"
+        "    response = json.loads(protocol_stdin.readline())\n"
         "    if response.get('status') != 'mcp_result': raise RuntimeError('Invalid MCP bridge response')\n"
         "    if response.get('error'): raise RuntimeError(response['error'])\n"
         "    return response.get('result')\n"
