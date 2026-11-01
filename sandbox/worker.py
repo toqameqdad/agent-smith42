@@ -223,6 +223,121 @@ def execute_in_sandbox(
         }
 
 
+
+def build_interactive_bootstrap_code(
+    authorized_imports: list[str],
+    allowed_directories: list[str],
+) -> str:
+    """Build a persistent sandbox REPL with final_answer injected."""
+    bootstrap_path = Path(__file__).with_name("bootstrap.py")
+    security_path = Path(__file__).with_name("security.py")
+    bootstrap_source = bootstrap_path.read_text(encoding="utf-8")
+    security_source = security_path.read_text(encoding="utf-8")
+
+    return (
+        "import contextlib, io, json, sys\\n"
+        f"bootstrap_source = {bootstrap_source!r}\\n"
+        f"security_source = {security_source!r}\\n"
+        f"authorized_imports = {authorized_imports!r}\\n"
+        f"allowed_directories = {allowed_directories!r}\\n"
+        "security_namespace = {'__name__': '_trusted_security'}\\n"
+        "exec(compile(security_source, '<trusted-security>', 'exec'), security_namespace)\\n"
+        "security_namespace['apply_worker_seccomp_policy']()\\n"
+        "security_namespace['apply_landlock'](allowed_directories, ['/bin', '/lib', '/lib64'])\\n"
+        "user_namespace = {'__name__': '__main__', '__builtins__': security_namespace['create_safe_builtins'](authorized_imports, allowed_directories)}\\n"
+        "class FinalAnswerSignal(Exception):\\n"
+        "    def __init__(self, answer): self.answer = answer\\n"
+        "def final_answer(answer):\\n"
+        "    if not isinstance(answer, str): raise TypeError('final_answer expects a string')\\n"
+        "    raise FinalAnswerSignal(answer)\\n"
+        "user_namespace['final_answer'] = final_answer\\n"
+        "sys.stdout.write(json.dumps({'status': 'ready'}) + '\\\\n')\\n"
+        "sys.stdout.flush()\\n"
+        "for line in sys.stdin:\\n"
+        "    request = json.loads(line)\\n"
+        "    if request.get('command') == 'close':\\n"
+        "        sys.stdout.write(json.dumps({'status': 'closed'}) + '\\\\n')\\n"
+        "        sys.stdout.flush()\\n"
+        "        break\\n"
+        "    output = io.StringIO()\\n"
+        "    try:\\n"
+        "        with contextlib.redirect_stdout(output), contextlib.redirect_stderr(output):\\n"
+        "            exec(compile(request['code'], '<sandbox-input>', 'exec'), user_namespace)\\n"
+        "        response = {'status': 'success', 'output': output.getvalue()}\\n"
+        "    except FinalAnswerSignal as signal:\\n"
+        "        response = {'status': 'final_answer', 'answer': signal.answer, 'output': output.getvalue()}\\n"
+        "    except (KeyboardInterrupt, SystemExit):\\n"
+        "        raise\\n"
+        "    except Exception as error:\\n"
+        "        response = {'status': 'error', 'message': f'{type(error).__name__}: {error}', 'output': output.getvalue()}\\n"
+        "    sys.stdout.write(json.dumps(response) + '\\\\n')\\n"
+        "    sys.stdout.flush()\\n"
+    )
+
+
+def _serve_interactive_worker() -> None:
+    """Run one persistent chrooted interpreter and relay JSON-line messages."""
+    try:
+        request = json.loads(sys.stdin.readline())
+        config = SandboxConfig.model_validate(request["config"])
+        prepare_python_runtime(SANDBOX_ROOT)
+
+        if not is_runtime_ready(SANDBOX_ROOT):
+            raise RuntimeError("Python runtime is not ready.")
+
+        mount_runtime_libraries(SANDBOX_ROOT, config.allowed_directories)
+        bootstrap_code = build_interactive_bootstrap_code(
+            config.authorized_imports,
+            config.allowed_directories,
+        )
+        command = build_chroot_command(SANDBOX_ROOT, bootstrap_code)
+        child = subprocess.Popen(
+            command,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            bufsize=1,
+            preexec_fn=lambda: set_memory_limit(config.max_memory_mb),
+        )
+
+        ready_line = child.stdout.readline()
+        if not ready_line:
+            error = child.stderr.read().strip()
+            raise RuntimeError(error or "Sandbox REPL failed to start.")
+
+        sys.stdout.write(ready_line)
+        sys.stdout.flush()
+
+        for line in sys.stdin:
+            child.stdin.write(line)
+            child.stdin.flush()
+            response_line = child.stdout.readline()
+            if not response_line:
+                error = child.stderr.read().strip()
+                response_line = json.dumps({
+                    "status": "error",
+                    "message": error or "Sandbox process exited.",
+                }) + "\\n"
+                sys.stdout.write(response_line)
+                sys.stdout.flush()
+                break
+
+            sys.stdout.write(response_line)
+            sys.stdout.flush()
+            if json.loads(line).get("command") == "close":
+                break
+
+        child.stdin.close()
+        child.wait(timeout=2)
+
+    except Exception as error:
+        sys.stdout.write(json.dumps({
+            "status": "error",
+            "message": f"{type(error).__name__}: {error}",
+        }) + "\\n")
+        sys.stdout.flush()
+
 def main() -> None:
     try:
         message = sys.stdin.read()
@@ -252,4 +367,7 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    if len(sys.argv) > 1 and sys.argv[1] == "--interactive":
+        _serve_interactive_worker()
+    else:
+        main()
