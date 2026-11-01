@@ -28,6 +28,10 @@ def run(
     sys.stdin.close()
 
     security_namespace["apply_worker_seccomp_policy"]()
+    security_namespace["apply_landlock"](
+        allowed_directories,
+        ["/bin", "/lib", "/lib64"],
+    )
 
     user_namespace = {
         "__name__": "__main__",
