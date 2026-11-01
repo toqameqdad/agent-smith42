@@ -126,7 +126,8 @@ class MCPClient:
                 schema = tool.get("inputSchema") or tool.get("input_schema") or {}
                 sections.append(
                     f"### {name}\n{description}\n"
-                    f"Call it as a Python function using keyword arguments.\n"
+                    f"Call it as a Python function using keyword arguments when its name is a valid identifier. "
+                    f"Otherwise use call_mcp_tool({name!r}, **arguments).\n"
                     f"Input schema:\n{json.dumps(schema, indent=2, ensure_ascii=False)}"
                 )
         else:
