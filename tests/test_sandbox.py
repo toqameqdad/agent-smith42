@@ -24,7 +24,7 @@ import sys
 def test_safe_builtins_allow_configured_imports():
     """Verify that restricted builtins allow imports from the allowlist."""
     namespace = {
-        "__builtins__": create_safe_builtins(["math"]),
+        "__builtins__": create_safe_builtins(["math"], ["/tmp"]),
     }
 
     exec("import math", namespace)
@@ -35,7 +35,7 @@ def test_safe_builtins_allow_configured_imports():
 def test_safe_builtins_block_unconfigured_imports():
     """Verify that the restricted importer rejects modules outside the allowlist."""
     namespace = {
-        "__builtins__": create_safe_builtins(["math"]),
+        "__builtins__": create_safe_builtins(["math"], ["/tmp"]),
     }
 
     try:
@@ -48,12 +48,66 @@ def test_safe_builtins_block_unconfigured_imports():
 
 def test_safe_builtins_hide_dangerous_functions():
     """Verify that selected dangerous builtins are not exposed."""
-    safe_builtins = create_safe_builtins(["math"])
+    safe_builtins = create_safe_builtins(["math"], ["/tmp"])
 
     assert "open" not in safe_builtins
     assert "eval" not in safe_builtins
     assert "exec" not in safe_builtins
     assert "__import__" in safe_builtins
+
+
+
+def test_guarded_open_allows_files_inside_allowed_directory(tmp_path):
+    """Verify that guarded open permits access inside allowed directories."""
+    allowed_dir = tmp_path / "testbed"
+    allowed_dir.mkdir()
+    target = allowed_dir / "result.txt"
+
+    safe_builtins = create_safe_builtins(
+        ["math"], [str(allowed_dir)]
+    )
+    namespace = {"__builtins__": safe_builtins}
+
+    exec(
+        "with open(" + repr(str(target)) + ", 'w') as file:\n"
+        "    file.write('safe')",
+        namespace,
+    )
+
+    assert target.read_text() == "safe"
+
+
+def test_guarded_open_blocks_files_outside_allowed_directory(tmp_path):
+    """Verify that guarded open rejects paths outside the allowlist."""
+    allowed_dir = tmp_path / "testbed"
+    allowed_dir.mkdir()
+    outside_file = tmp_path / "secret.txt"
+
+    safe_builtins = create_safe_builtins(
+        ["math"], [str(allowed_dir)]
+    )
+    namespace = {"__builtins__": safe_builtins}
+
+    try:
+        exec(
+            "open(" + repr(str(outside_file)) + ", 'w')",
+            namespace,
+        )
+    except PermissionError:
+        pass
+    else:
+        raise AssertionError("Opening an outside path should be blocked")
+
+
+def test_safe_builtins_support_class_definitions():
+    """Verify that restricted builtins retain Python class support."""
+    namespace = {
+        "__name__": "__main__",
+        "__builtins__": create_safe_builtins(["math"], ["/tmp"]),
+    }
+
+    exec("class Example:\\n    pass", namespace)
+    assert namespace["Example"]().__class__.__name__ == "Example"
 
 
 def test_allowed_import():
