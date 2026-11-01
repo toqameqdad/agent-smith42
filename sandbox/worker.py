@@ -77,28 +77,92 @@ def set_memory_limit(memory_mb: int) -> None:
     )
 
 
-def mount_runtime_libraries(root: Path) -> None:
+def _run_mount_command(arguments: list[str]) -> None:
     subprocess.run(
-        ["mount", "--make-rprivate", "/"],
+        ["mount", *arguments],
         check=True,
         capture_output=True,
         text=True,
         timeout=10,
     )
+
+
+def mount_runtime_libraries(
+    root: Path,
+    allowed_directories: list[str],
+) -> None:
+    """
+    Mount the runtime read-only and expose only configured writable directories.
+
+    This function must run inside the worker's private mount namespace.
+    """
+    root = root.resolve(strict=True)
+
+    _run_mount_command(["--make-rprivate", "/"])
+    _run_mount_command(["--bind", str(root), str(root)])
+
     python_executable = root / "bin" / "python3.10"
-
     libraries = get_shared_libraries(str(python_executable))
-    libraries.append("/lib/x86_64-linux-gnu/libseccomp.so.2")
-    mount_points = prepare_library_mount_points(root, libraries)
+    seccomp_library = "/lib/x86_64-linux-gnu/libseccomp.so.2"
+    if seccomp_library not in libraries:
+        libraries.append(seccomp_library)
 
+    mount_points = prepare_library_mount_points(root, libraries)
     for source, destination in mount_points:
-        subprocess.run(
-            ["mount", "--bind", str(source), str(destination)],
-            check=True,
-            capture_output=True,
-            text=True,
-            timeout=10,
-        )
+        _run_mount_command(["--bind", str(source), str(destination)])
+        _run_mount_command([
+            "--remount", "--bind", "ro", str(destination)
+        ])
+
+    writable_targets: list[Path] = []
+    for directory in allowed_directories:
+        configured_path = Path(directory)
+        if not configured_path.is_absolute() or ".." in configured_path.parts:
+            raise ValueError(
+                f"Allowed directory must be an absolute sandbox path: {directory}"
+            )
+
+        target = root / configured_path.relative_to("/")
+        try:
+            resolved_target = target.resolve(strict=True)
+        except (OSError, RuntimeError) as error:
+            raise ValueError(
+                f"Allowed directory does not exist: {directory}"
+            ) from error
+
+        if (
+            resolved_target != target
+            or resolved_target == root
+            or not resolved_target.is_relative_to(root)
+            or not resolved_target.is_dir()
+        ):
+            raise ValueError(
+                f"Invalid allowed directory inside sandbox: {directory}"
+            )
+
+        if any(
+            resolved_target == existing
+            or resolved_target.is_relative_to(existing)
+            or existing.is_relative_to(resolved_target)
+            for existing in writable_targets
+        ):
+            raise ValueError(
+                f"Overlapping allowed directories are not supported: {directory}"
+            )
+
+        writable_targets.append(resolved_target)
+
+    for target in writable_targets:
+        _run_mount_command(["--bind", str(target), str(target)])
+
+    _run_mount_command([
+        "--remount", "--bind", "ro", str(root)
+    ])
+
+    for target in writable_targets:
+        _run_mount_command([
+            "--remount", "--bind", "rw", str(target)
+        ])
 
 
 def execute_in_sandbox(
@@ -117,9 +181,12 @@ def execute_in_sandbox(
         if not is_runtime_ready(SANDBOX_ROOT):
             raise RuntimeError("Python runtime is not ready.")
 
-        mount_runtime_libraries(SANDBOX_ROOT)
+        mount_runtime_libraries(SANDBOX_ROOT, config.allowed_directories)
 
-        bootstrap_code = build_bootstrap_code(\n            config.authorized_imports, config.allowed_directories\n        )
+        bootstrap_code = build_bootstrap_code(
+            config.authorized_imports,
+            config.allowed_directories,
+        )
         command = build_chroot_command(SANDBOX_ROOT, bootstrap_code)
 
         result = subprocess.run(
