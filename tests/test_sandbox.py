@@ -1175,3 +1175,23 @@ def test_repl_stops_after_final_answer(monkeypatch):
 
     assert run_repl(SandboxConfig()) == 0
     assert next(inputs) == "this must not be read"
+
+
+def test_mcp_discovery_does_not_hide_transport_errors():
+    """Verify MCP discovery errors are reported instead of becoming empty lists."""
+    import asyncio
+    from sandbox.mcp_client import MCPClient
+
+    class BrokenMCP:
+        async def list_tools(self, cursor=None):
+            raise RuntimeError("MCP transport failed")
+
+    client = MCPClient.__new__(MCPClient)
+    client._client = BrokenMCP()
+
+    try:
+        asyncio.run(client._safe_list("list_tools", "tools"))
+    except RuntimeError as error:
+        assert str(error) == "MCP transport failed"
+    else:
+        raise AssertionError("MCP discovery silently hid a transport failure")
