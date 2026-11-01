@@ -2,6 +2,7 @@ import json
 import sys
 import subprocess
 import resource
+import sysconfig
 from pathlib import Path
 
 from pydantic import ValidationError
@@ -120,6 +121,18 @@ def mount_runtime_libraries(
         libraries.append(seccomp_library)
 
     mount_points = prepare_library_mount_points(root, libraries)
+
+    python_library_name = sysconfig.get_config_var("LDLIBRARY")
+    multiarch = sysconfig.get_config_var("MULTIARCH")
+    library_directory = sysconfig.get_config_var("LIBDIR")
+    if python_library_name and library_directory and multiarch:
+        python_library = Path(library_directory) / python_library_name
+        if python_library.is_file():
+            loader_directory = root / "lib" / multiarch
+            loader_directory.mkdir(parents=True, exist_ok=True)
+            loader_target = loader_directory / python_library.name
+            loader_target.touch(exist_ok=True)
+            mount_points.append((python_library, loader_target))
     for source, destination in mount_points:
         _run_mount_command(["--bind", str(source), str(destination)])
         _run_mount_command([
