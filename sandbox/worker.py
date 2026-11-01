@@ -251,12 +251,12 @@ def build_interactive_bootstrap_code(
         "    if not isinstance(answer, str): raise TypeError('final_answer expects a string')\n"
         "    raise FinalAnswerSignal(answer)\n"
         "user_namespace['final_answer'] = final_answer\n"
-        "sys.stdout.write(json.dumps({'status': 'ready'}) + '\\\n')\n"
+        "sys.stdout.write(json.dumps({'status': 'ready'}) + '\\n')\n"
         "sys.stdout.flush()\n"
         "for line in sys.stdin:\n"
         "    request = json.loads(line)\n"
         "    if request.get('command') == 'close':\n"
-        "        sys.stdout.write(json.dumps({'status': 'closed'}) + '\\\n')\n"
+        "        sys.stdout.write(json.dumps({'status': 'closed'}) + '\\n')\n"
         "        sys.stdout.flush()\n"
         "        break\n"
         "    output = io.StringIO()\n"
@@ -270,7 +270,7 @@ def build_interactive_bootstrap_code(
         "        raise\n"
         "    except Exception as error:\n"
         "        response = {'status': 'error', 'message': f'{type(error).__name__}: {error}', 'output': output.getvalue()}\n"
-        "    sys.stdout.write(json.dumps(response) + '\\\n')\n"
+        "    sys.stdout.write(json.dumps(response) + '\\n')\n"
         "    sys.stdout.flush()\n"
     )
 
