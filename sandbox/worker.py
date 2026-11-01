@@ -47,6 +47,13 @@ def set_memory_limit(memory_mb: int) -> None:
 
 
 def mount_runtime_libraries(root: Path) -> None:
+    subprocess.run(
+        ["mount", "--make-rprivate", "/"],
+        check=True,
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
     python_executable = root / "bin" / "python3.10"
 
     libraries = get_shared_libraries(str(python_executable))
