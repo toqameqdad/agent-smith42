@@ -1,4 +1,5 @@
 import sys
+import json
 
 
 def run(
@@ -40,14 +41,32 @@ def run(
         ](authorized_imports, allowed_directories),
     }
 
-    exec(
-        compile(
-            user_code,
-            "<sandbox-user-code>",
-            "exec",
-        ),
-        user_namespace,
-    )
+    class FinalAnswerSignal(Exception):
+        def __init__(self, answer: str):
+            self.answer = answer
+
+    def final_answer(answer: str) -> None:
+        if not isinstance(answer, str):
+            raise TypeError("final_answer expects a string")
+        raise FinalAnswerSignal(answer)
+
+    user_namespace["final_answer"] = final_answer
+
+    try:
+        exec(
+            compile(
+                user_code,
+                "<sandbox-user-code>",
+                "exec",
+            ),
+            user_namespace,
+        )
+    except FinalAnswerSignal as signal:
+        sys.stdout.write(
+            "\\x1eAGENT_SMITH_FINAL_ANSWER:"
+            + json.dumps(signal.answer)
+            + "\\n"
+        )
 
 
 if __name__ == "__main__":
