@@ -123,6 +123,7 @@ def mount_runtime_libraries(
     mount_points = prepare_library_mount_points(root, libraries)
 
     python_library_name = sysconfig.get_config_var("LDLIBRARY")
+    installed_library_name = sysconfig.get_config_var("INSTSONAME")
     multiarch = sysconfig.get_config_var("MULTIARCH")
     library_directory = sysconfig.get_config_var("LIBDIR")
     if python_library_name and library_directory and multiarch:
@@ -130,7 +131,8 @@ def mount_runtime_libraries(
         if python_library.is_file():
             loader_directory = root / "lib" / multiarch
             loader_directory.mkdir(parents=True, exist_ok=True)
-            loader_target = loader_directory / python_library.name
+            loader_name = installed_library_name or python_library.name
+            loader_target = loader_directory / loader_name
             loader_target.touch(exist_ok=True)
             mount_points.append((python_library, loader_target))
     for source, destination in mount_points:
