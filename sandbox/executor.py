@@ -228,7 +228,6 @@ class SandboxSession:
                     json.dumps({"command": "close"}) + "\n"
                 )
                 self.process.stdin.flush()
-                self.process.stdout.readline()
                 self.process.wait(timeout=2)
             except (BrokenPipeError, OSError, subprocess.TimeoutExpired):
                 self._terminate()
