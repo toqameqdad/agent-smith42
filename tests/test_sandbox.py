@@ -1,4 +1,3 @@
-
 from pathlib import Path
 from sandbox.environment import (
     get_python_paths,
@@ -9,11 +8,52 @@ from sandbox.environment import (
     build_chroot_command,
     build_restricted_command,
 )
-from sandbox.security import is_path_allowed, is_import_allowed, check_imports, apply_worker_seccomp_policy 
+from sandbox.security import (
+    is_path_allowed,
+    is_import_allowed,
+    check_imports,
+    apply_worker_seccomp_policy,
+    create_safe_builtins,
+)
 from sandbox.executor import execute_code, send_to_worker
 from sandbox.config import SandboxConfig
 from sandbox.worker import is_runtime_ready
 import sys
+
+
+def test_safe_builtins_allow_configured_imports():
+    """Verify that restricted builtins allow imports from the allowlist."""
+    namespace = {
+        "__builtins__": create_safe_builtins(["math"]),
+    }
+
+    exec("import math", namespace)
+
+    assert namespace["math"].sqrt(9) == 3
+
+
+def test_safe_builtins_block_unconfigured_imports():
+    """Verify that the restricted importer rejects modules outside the allowlist."""
+    namespace = {
+        "__builtins__": create_safe_builtins(["math"]),
+    }
+
+    try:
+        exec("import os", namespace)
+    except ImportError:
+        pass
+    else:
+        raise AssertionError("Importing os should be blocked")
+
+
+def test_safe_builtins_hide_dangerous_functions():
+    """Verify that selected dangerous builtins are not exposed."""
+    safe_builtins = create_safe_builtins(["math"])
+
+    assert "open" not in safe_builtins
+    assert "eval" not in safe_builtins
+    assert "exec" not in safe_builtins
+    assert "__import__" in safe_builtins
 
 
 def test_allowed_import():
