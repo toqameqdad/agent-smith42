@@ -65,7 +65,7 @@ def run(
         sys.stdout.write(
             "__AGENT_SMITH_FINAL_ANSWER__:"
             + json.dumps(signal.answer)
-            + "\\n"
+            + "\n"
         )
 
 
