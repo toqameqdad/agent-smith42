@@ -227,6 +227,8 @@ def execute_in_sandbox(
 def build_interactive_bootstrap_code(
     authorized_imports: list[str],
     allowed_directories: list[str],
+    mcp_tools: list[dict] | None = None,
+    mcp_manual: str = "",
 ) -> str:
     """Build a persistent sandbox REPL with final_answer injected."""
     bootstrap_path = Path(__file__).with_name("bootstrap.py")
@@ -240,6 +242,8 @@ def build_interactive_bootstrap_code(
         f"security_source = {security_source!r}\n"
         f"authorized_imports = {authorized_imports!r}\n"
         f"allowed_directories = {allowed_directories!r}\n"
+        f"mcp_tools = {mcp_tools or []!r}\n"
+        f"mcp_manual = {mcp_manual!r}\n"
         "security_namespace = {'__name__': '_trusted_security'}\n"
         "exec(compile(security_source, '<trusted-security>', 'exec'), security_namespace)\n"
         "security_namespace['apply_worker_seccomp_policy']()\n"
@@ -251,6 +255,29 @@ def build_interactive_bootstrap_code(
         "    if not isinstance(answer, str): raise TypeError('final_answer expects a string')\n"
         "    raise FinalAnswerSignal(answer)\n"
         "user_namespace['final_answer'] = final_answer\n"
+        "user_namespace['sandbox_manual'] = mcp_manual\n"
+        "def _mcp_request(method, params):\n"
+        "    sys.stdout.write(json.dumps({'status': 'mcp_call', 'method': method, 'params': params}) + '\\n')\n"
+        "    sys.stdout.flush()\n"
+        "    response = json.loads(sys.stdin.readline())\n"
+        "    if response.get('status') != 'mcp_result': raise RuntimeError('Invalid MCP bridge response')\n"
+        "    if response.get('error'): raise RuntimeError(response['error'])\n"
+        "    return response.get('result')\n"
+        "def call_mcp_tool(name, **arguments): return _mcp_request('call_tool', {'name': name, 'arguments': arguments})\n"
+        "def mcp_list_resources(): return _mcp_request('list_resources', {})\n"
+        "def mcp_read_resource(uri): return _mcp_request('read_resource', {'uri': uri})\n"
+        "def mcp_list_prompts(): return _mcp_request('list_prompts', {})\n"
+        "def mcp_get_prompt(name, arguments=None): return _mcp_request('get_prompt', {'name': name, 'arguments': arguments or {}})\n"
+        "user_namespace.update({'call_mcp_tool': call_mcp_tool, 'mcp_list_resources': mcp_list_resources, 'mcp_read_resource': mcp_read_resource, 'mcp_list_prompts': mcp_list_prompts, 'mcp_get_prompt': mcp_get_prompt})\n"
+        "import keyword\n"
+        "def _make_mcp_wrapper(tool_name):\n"
+        "    def _wrapper(**arguments): return call_mcp_tool(tool_name, **arguments)\n"
+        "    _wrapper.__name__ = tool_name\n"
+        "    return _wrapper\n"
+        "for _tool in mcp_tools:\n"
+        "    _tool_name = _tool.get('name', '')\n"
+        "    if _tool_name.isidentifier() and not keyword.iskeyword(_tool_name) and _tool_name not in user_namespace and _tool_name not in user_namespace['__builtins__']:\n"
+        "        user_namespace[_tool_name] = _make_mcp_wrapper(_tool_name)\n"
         "sys.stdout.write(json.dumps({'status': 'ready'}) + '\\n')\n"
         "sys.stdout.flush()\n"
         "for line in sys.stdin:\n"
@@ -289,6 +316,8 @@ def _serve_interactive_worker() -> None:
         bootstrap_code = build_interactive_bootstrap_code(
             config.authorized_imports,
             config.allowed_directories,
+            request.get("mcp_tools", []),
+            request.get("mcp_manual", ""),
         )
         command = build_chroot_command(SANDBOX_ROOT, bootstrap_code)
         child = subprocess.Popen(
