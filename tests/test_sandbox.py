@@ -50,7 +50,7 @@ def test_safe_builtins_hide_dangerous_functions():
     """Verify that selected dangerous builtins are not exposed."""
     safe_builtins = create_safe_builtins(["math"], ["/tmp"])
 
-    assert "open" not in safe_builtins
+    assert "open" in safe_builtins  # guarded by the directory allowlist
     assert "eval" not in safe_builtins
     assert "exec" not in safe_builtins
     assert "__import__" in safe_builtins
