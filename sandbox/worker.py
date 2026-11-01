@@ -1,4 +1,3 @@
-
 import json
 import sys
 import subprocess
@@ -19,10 +18,16 @@ from sandbox.security import check_imports
 
 SANDBOX_ROOT = Path("/tmp/agent-smith-runtime")
 
-def build_bootstrap_code() -> str:
+
+def build_bootstrap_code(
+    authorized_imports: list[str] | None = None,
+) -> str:
     """
     Build trusted bootstrap code for execution inside chroot.
     """
+
+    if authorized_imports is None:
+        authorized_imports = SandboxConfig().authorized_imports
 
     bootstrap_path = Path(__file__).with_name("bootstrap.py")
     security_path = Path(__file__).with_name("security.py")
@@ -34,10 +39,11 @@ def build_bootstrap_code() -> str:
         "import sys\n"
         f"bootstrap_source = {bootstrap_source!r}\n"
         f"security_source = {security_source!r}\n"
+        f"authorized_imports = {authorized_imports!r}\n"
         "namespace = {'__name__': '_trusted_bootstrap'}\n"
         "exec(compile(bootstrap_source, '<trusted-bootstrap>', 'exec'), namespace)\n"
         "user_code = sys.stdin.read()\n"
-        "namespace['run'](user_code, security_source)\n"
+        "namespace['run'](user_code, security_source, authorized_imports)\n"
     )
 
 
@@ -108,7 +114,7 @@ def execute_in_sandbox(
 
         mount_runtime_libraries(SANDBOX_ROOT)
 
-        bootstrap_code = build_bootstrap_code()
+        bootstrap_code = build_bootstrap_code(config.authorized_imports)
         command = build_chroot_command(SANDBOX_ROOT, bootstrap_code)
 
         result = subprocess.run(
