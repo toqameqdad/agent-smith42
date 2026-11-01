@@ -162,7 +162,7 @@ def test_check_imports():
 
 
 def test_worker_communication():
-    """Verify that the worker receives code and sandbox configuration."""
+    """Verify that the worker executes code and returns its output."""
 
     config = SandboxConfig(
         max_execution_time_seconds=10,
@@ -174,10 +174,8 @@ def test_worker_communication():
         config
     )
 
-    assert response["status"] == "received"
-    assert response["code"] == "print(5 + 5)"
-    assert response["timeout"] == 10
-    assert response["memory_mb"] == 256
+    assert response["status"] == "success"
+    assert response["output"] == "10\n"
 
 
 def test_python_paths():
@@ -281,6 +279,8 @@ def test_runtime_ready(tmp_path):
 
     encodings.mkdir(parents=True)
     lib_dynload.mkdir(parents=True)
+
+    (root / "install").symlink_to(".")
 
     assert is_runtime_ready(root) is True
 
