@@ -64,7 +64,7 @@ def test_interactive_mcp_request_response_round_trip():
         assert final == {
             "status": "final_answer",
             "answer": "done",
-            "output": "42\\n",
+            "output": "42\n",
         }
     finally:
         if process.poll() is None:
