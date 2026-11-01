@@ -257,7 +257,32 @@ def test_check_imports():
 
 
 def test_worker_communication():
-    """Verify that the worker executes code and returns its output."""
+    """Verify worker execution when Linux namespaces are available."""
+    import subprocess
+    import pytest
+
+    try:
+        namespace_probe = subprocess.run(
+            [
+                "unshare",
+                "--user",
+                "--map-root-user",
+                "--mount",
+                "--net",
+                "true",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+    except (OSError, subprocess.SubprocessError) as error:
+        pytest.skip(f"Linux namespaces are unavailable: {error}")
+
+    if namespace_probe.returncode != 0:
+        pytest.skip(
+            "Linux user, mount, and network namespaces are unavailable: "
+            + namespace_probe.stderr.strip()
+        )
 
     config = SandboxConfig(
         max_execution_time_seconds=10,
