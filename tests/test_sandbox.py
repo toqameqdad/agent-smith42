@@ -1002,3 +1002,19 @@ def test_worker_seccomp_blocks_network_syscalls():
         f"STDOUT:\\n{result.stdout}\\nSTDERR:\\n{result.stderr}"
     )
     assert "Network syscall restriction passed" in result.stdout
+
+
+
+def test_interactive_bootstrap_code_is_valid_and_injects_final_answer():
+    """Verify the persistent bootstrap keeps state and exposes final_answer."""
+    from sandbox.worker import build_interactive_bootstrap_code
+
+    source = build_interactive_bootstrap_code(
+        ["math"],
+        ["/testbed", "/tmp/agent"],
+    )
+
+    compile(source, "<interactive-bootstrap-test>", "exec")
+    assert "user_namespace['final_answer'] = final_answer" in source
+    assert "for line in sys.stdin" in source
+    assert "FinalAnswerSignal" in source
