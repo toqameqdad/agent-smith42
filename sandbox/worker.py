@@ -205,7 +205,7 @@ def execute_in_sandbox(
                 "output": result.stdout,
             }
 
-        marker = "\\x1eAGENT_SMITH_FINAL_ANSWER:"
+        marker = "__AGENT_SMITH_FINAL_ANSWER__:"
         marker_index = result.stdout.rfind(marker)
         if marker_index >= 0:
             answer_line = result.stdout[marker_index + len(marker):].splitlines()[0]
