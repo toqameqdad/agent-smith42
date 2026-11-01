@@ -887,6 +887,8 @@ def test_seccomp_bootstrap_structure():
     assert "seccomp_load" in bootstrap
     assert "apply_landlock" in bootstrap
     assert "exec(" in bootstrap
+    assert "final_answer" in bootstrap
+    assert "__AGENT_SMITH_FINAL_ANSWER__" in bootstrap
 
 
 
@@ -1075,3 +1077,12 @@ def test_mcp_manual_uses_connected_server_schemas():
     assert "mcp_get_prompt(name, arguments={})" in manual
     assert "file:///project" in manual
     assert "review" in manual
+
+
+
+def test_mcp_sdk_client_imports():
+    """Verify the installed MCP SDK exposes both supported client transports."""
+    from mcp import Client, StdioServerParameters
+
+    assert Client is not None
+    assert StdioServerParameters is not None
