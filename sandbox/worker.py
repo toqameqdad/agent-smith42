@@ -235,43 +235,43 @@ def build_interactive_bootstrap_code(
     security_source = security_path.read_text(encoding="utf-8")
 
     return (
-        "import contextlib, io, json, sys\\n"
-        f"bootstrap_source = {bootstrap_source!r}\\n"
-        f"security_source = {security_source!r}\\n"
-        f"authorized_imports = {authorized_imports!r}\\n"
-        f"allowed_directories = {allowed_directories!r}\\n"
-        "security_namespace = {'__name__': '_trusted_security'}\\n"
-        "exec(compile(security_source, '<trusted-security>', 'exec'), security_namespace)\\n"
-        "security_namespace['apply_worker_seccomp_policy']()\\n"
-        "security_namespace['apply_landlock'](allowed_directories, ['/bin', '/lib', '/lib64'])\\n"
-        "user_namespace = {'__name__': '__main__', '__builtins__': security_namespace['create_safe_builtins'](authorized_imports, allowed_directories)}\\n"
-        "class FinalAnswerSignal(Exception):\\n"
-        "    def __init__(self, answer): self.answer = answer\\n"
-        "def final_answer(answer):\\n"
-        "    if not isinstance(answer, str): raise TypeError('final_answer expects a string')\\n"
-        "    raise FinalAnswerSignal(answer)\\n"
-        "user_namespace['final_answer'] = final_answer\\n"
-        "sys.stdout.write(json.dumps({'status': 'ready'}) + '\\\\n')\\n"
-        "sys.stdout.flush()\\n"
-        "for line in sys.stdin:\\n"
-        "    request = json.loads(line)\\n"
-        "    if request.get('command') == 'close':\\n"
-        "        sys.stdout.write(json.dumps({'status': 'closed'}) + '\\\\n')\\n"
-        "        sys.stdout.flush()\\n"
-        "        break\\n"
-        "    output = io.StringIO()\\n"
-        "    try:\\n"
-        "        with contextlib.redirect_stdout(output), contextlib.redirect_stderr(output):\\n"
-        "            exec(compile(request['code'], '<sandbox-input>', 'exec'), user_namespace)\\n"
-        "        response = {'status': 'success', 'output': output.getvalue()}\\n"
-        "    except FinalAnswerSignal as signal:\\n"
-        "        response = {'status': 'final_answer', 'answer': signal.answer, 'output': output.getvalue()}\\n"
-        "    except (KeyboardInterrupt, SystemExit):\\n"
-        "        raise\\n"
-        "    except Exception as error:\\n"
-        "        response = {'status': 'error', 'message': f'{type(error).__name__}: {error}', 'output': output.getvalue()}\\n"
-        "    sys.stdout.write(json.dumps(response) + '\\\\n')\\n"
-        "    sys.stdout.flush()\\n"
+        "import contextlib, io, json, sys\n"
+        f"bootstrap_source = {bootstrap_source!r}\n"
+        f"security_source = {security_source!r}\n"
+        f"authorized_imports = {authorized_imports!r}\n"
+        f"allowed_directories = {allowed_directories!r}\n"
+        "security_namespace = {'__name__': '_trusted_security'}\n"
+        "exec(compile(security_source, '<trusted-security>', 'exec'), security_namespace)\n"
+        "security_namespace['apply_worker_seccomp_policy']()\n"
+        "security_namespace['apply_landlock'](allowed_directories, ['/bin', '/lib', '/lib64'])\n"
+        "user_namespace = {'__name__': '__main__', '__builtins__': security_namespace['create_safe_builtins'](authorized_imports, allowed_directories)}\n"
+        "class FinalAnswerSignal(Exception):\n"
+        "    def __init__(self, answer): self.answer = answer\n"
+        "def final_answer(answer):\n"
+        "    if not isinstance(answer, str): raise TypeError('final_answer expects a string')\n"
+        "    raise FinalAnswerSignal(answer)\n"
+        "user_namespace['final_answer'] = final_answer\n"
+        "sys.stdout.write(json.dumps({'status': 'ready'}) + '\\\n')\n"
+        "sys.stdout.flush()\n"
+        "for line in sys.stdin:\n"
+        "    request = json.loads(line)\n"
+        "    if request.get('command') == 'close':\n"
+        "        sys.stdout.write(json.dumps({'status': 'closed'}) + '\\\n')\n"
+        "        sys.stdout.flush()\n"
+        "        break\n"
+        "    output = io.StringIO()\n"
+        "    try:\n"
+        "        with contextlib.redirect_stdout(output), contextlib.redirect_stderr(output):\n"
+        "            exec(compile(request['code'], '<sandbox-input>', 'exec'), user_namespace)\n"
+        "        response = {'status': 'success', 'output': output.getvalue()}\n"
+        "    except FinalAnswerSignal as signal:\n"
+        "        response = {'status': 'final_answer', 'answer': signal.answer, 'output': output.getvalue()}\n"
+        "    except (KeyboardInterrupt, SystemExit):\n"
+        "        raise\n"
+        "    except Exception as error:\n"
+        "        response = {'status': 'error', 'message': f'{type(error).__name__}: {error}', 'output': output.getvalue()}\n"
+        "    sys.stdout.write(json.dumps(response) + '\\\n')\n"
+        "    sys.stdout.flush()\n"
     )
 
 
@@ -318,7 +318,7 @@ def _serve_interactive_worker() -> None:
                 response_line = json.dumps({
                     "status": "error",
                     "message": error or "Sandbox process exited.",
-                }) + "\\n"
+                }) + "\n"
                 sys.stdout.write(response_line)
                 sys.stdout.flush()
                 break
@@ -335,7 +335,7 @@ def _serve_interactive_worker() -> None:
         sys.stdout.write(json.dumps({
             "status": "error",
             "message": f"{type(error).__name__}: {error}",
-        }) + "\\n")
+        }) + "\n")
         sys.stdout.flush()
 
 def main() -> None:
