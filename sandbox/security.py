@@ -3,6 +3,8 @@ import ast
 import builtins
 import ctypes
 import errno
+import os
+import platform
 
 
 BLOCKED_WORKER_SYSCALLS = [
@@ -415,3 +417,134 @@ def apply_worker_seccomp_policy() -> None:
         block_namespace_clone=True,
         enosys_syscalls=["clone3"],
     )
+
+
+class LandlockRulesetAttr(ctypes.Structure):
+    """Landlock ruleset attributes supported by the filesystem ABI."""
+
+    _fields_ = [("handled_access_fs", ctypes.c_uint64)]
+
+
+class LandlockPathBeneathAttr(ctypes.Structure):
+    """A filesystem path and the access rights granted beneath it."""
+
+    _fields_ = [
+        ("allowed_access", ctypes.c_uint64),
+        ("parent_fd", ctypes.c_int32),
+        ("reserved", ctypes.c_uint32),
+    ]
+
+
+def apply_landlock(
+    allowed_directories: list[str],
+    runtime_directories: list[str] | None = None,
+) -> None:
+    """
+    Restrict filesystem access for the current process using Linux Landlock.
+
+    Runtime directories are read-only so Python can load its executable,
+    standard library, and shared libraries. Configured directories receive
+    the full filesystem access supported by the running Landlock ABI.
+    """
+    machine = platform.machine().lower()
+    if machine not in {"x86_64", "amd64", "aarch64", "arm64"}:
+        raise RuntimeError(
+            f"Landlock syscall numbers are not configured for {machine}"
+        )
+
+    syscall_create_ruleset = 444
+    syscall_add_rule = 445
+    syscall_restrict_self = 446
+    landlock_create_ruleset_version = 1
+    landlock_rule_path_beneath = 1
+
+    libc = ctypes.CDLL(None, use_errno=True)
+    libc.syscall.restype = ctypes.c_long
+
+    abi_version = libc.syscall(
+        syscall_create_ruleset,
+        None,
+        0,
+        landlock_create_ruleset_version,
+    )
+    if abi_version < 1:
+        error = ctypes.get_errno()
+        raise OSError(error, "Landlock is not available")
+
+    access_fs = (1 << 13) - 1
+    if abi_version >= 2:
+        access_fs |= 1 << 13  # LANDLOCK_ACCESS_FS_REFER
+    if abi_version >= 3:
+        access_fs |= 1 << 14  # LANDLOCK_ACCESS_FS_TRUNCATE
+
+    read_execute_access = (
+        (1 << 0)  # LANDLOCK_ACCESS_FS_EXECUTE
+        | (1 << 2)  # LANDLOCK_ACCESS_FS_READ_FILE
+        | (1 << 3)  # LANDLOCK_ACCESS_FS_READ_DIR
+    )
+
+    ruleset_attr = LandlockRulesetAttr(access_fs)
+    ruleset_fd = libc.syscall(
+        syscall_create_ruleset,
+        ctypes.byref(ruleset_attr),
+        ctypes.sizeof(ruleset_attr),
+        0,
+    )
+    if ruleset_fd < 0:
+        error = ctypes.get_errno()
+        raise OSError(error, "Failed to create Landlock ruleset")
+
+    def add_path_rule(directory: str, access: int) -> None:
+        path = Path(directory)
+        if not path.is_absolute() or ".." in path.parts:
+            raise ValueError(
+                f"Landlock paths must be absolute and normalized: {directory}"
+            )
+
+        resolved_path = path.resolve(strict=True)
+        if not resolved_path.is_dir():
+            raise ValueError(
+                f"Landlock path is not a directory: {directory}"
+            )
+
+        path_fd = os.open(
+            str(resolved_path),
+            os.O_PATH | os.O_CLOEXEC | os.O_DIRECTORY,
+        )
+        try:
+            rule = LandlockPathBeneathAttr(access, path_fd, 0)
+            result = libc.syscall(
+                syscall_add_rule,
+                ruleset_fd,
+                landlock_rule_path_beneath,
+                ctypes.byref(rule),
+                0,
+            )
+            if result != 0:
+                error = ctypes.get_errno()
+                raise OSError(
+                    error,
+                    f"Failed to add Landlock rule for {directory}",
+                )
+        finally:
+            os.close(path_fd)
+
+    try:
+        for directory in runtime_directories or []:
+            if Path(directory).exists():
+                add_path_rule(directory, read_execute_access)
+
+        for directory in allowed_directories:
+            add_path_rule(directory, access_fs)
+
+        set_no_new_privs()
+        result = libc.syscall(
+            syscall_restrict_self,
+            ruleset_fd,
+            0,
+        )
+        if result != 0:
+            error = ctypes.get_errno()
+            raise OSError(error, "Failed to enforce Landlock ruleset")
+    finally:
+        os.close(ruleset_fd)
