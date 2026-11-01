@@ -342,6 +342,7 @@ def _serve_interactive_worker() -> None:
             child.stdin.write(line)
             child.stdin.flush()
             is_close = json.loads(line).get("command") == "close"
+            child_exited = False
 
             while True:
                 response_line = child.stdout.readline()
@@ -353,6 +354,7 @@ def _serve_interactive_worker() -> None:
                     }) + "\n"
                     sys.stdout.write(response_line)
                     sys.stdout.flush()
+                    child_exited = True
                     break
 
                 response = json.loads(response_line)
@@ -362,13 +364,14 @@ def _serve_interactive_worker() -> None:
                 if response.get("status") == "mcp_call":
                     mcp_response = sys.stdin.readline()
                     if not mcp_response:
+                        child_exited = True
                         break
                     child.stdin.write(mcp_response)
                     child.stdin.flush()
                     continue
                 break
 
-            if is_close or not response_line:
+            if is_close or child_exited:
                 break
 
         child.stdin.close()
