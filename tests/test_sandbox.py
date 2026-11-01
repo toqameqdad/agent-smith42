@@ -264,6 +264,18 @@ def test_build_chroot_command(tmp_path):
     ]
 
 
+def test_build_chroot_command_with_bootstrap(tmp_path):
+    """Verify that the chroot command runs the trusted bootstrap."""
+
+    root = tmp_path / "sandbox-root"
+    bootstrap = "print('Trusted bootstrap')"
+
+    command = build_chroot_command(root, bootstrap)
+
+    assert command[-2:] == ["-c", bootstrap]
+    assert command[0] == "chroot"
+    assert command[1] == str(root)
+    
 
 def test_runtime_ready(tmp_path):
     """Verify that a prepared runtime passes the readiness check."""
@@ -653,3 +665,25 @@ def test_prepare_python_runtime(tmp_path):
     assert not (
         root / "lib" / "python3.10" / "site-packages"
     ).exists()
+
+
+def test_set_no_new_privs():
+    import ctypes
+
+    from sandbox.security import set_no_new_privs
+
+    set_no_new_privs()
+
+    libc = ctypes.CDLL(None, use_errno=True)
+
+    PR_GET_NO_NEW_PRIVS = 39
+
+    result = libc.prctl(
+        PR_GET_NO_NEW_PRIVS,
+        0,
+        0,
+        0,
+        0,
+    )
+
+    assert result == 1

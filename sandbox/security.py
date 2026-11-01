@@ -33,6 +33,28 @@ class ScmpArgCmp(ctypes.Structure):
     ]
 
 
+
+def set_no_new_privs() -> None:
+    """
+    Prevent the process from gaining new privileges.
+    """
+    libc = ctypes.CDLL(None, use_errno=True)
+
+    PR_SET_NO_NEW_PRIVS = 38
+
+    result = libc.prctl(
+        PR_SET_NO_NEW_PRIVS,
+        1,
+        0,
+        0,
+        0,
+    )
+
+    if result != 0:
+        error = ctypes.get_errno()
+        raise OSError(error, "Failed to set no_new_privs")
+
+
 def add_clone_namespace_rules(lib, context: int) -> None:
     """
     Block clone calls that request new Linux namespaces.
@@ -223,7 +245,7 @@ def check_imports(
                     and node.func.value.id == "importlib"
                 ):
                     return False
-                    
+
             if (
                 isinstance(node.func, ast.Name)
                 and node.func.id == "getattr"
@@ -322,6 +344,7 @@ def apply_seccomp_filter(
 
         if block_namespace_clone:
             add_clone_namespace_rules(lib, context)
+        set_no_new_privs()
         result = lib.seccomp_load(context)
 
         if result != 0:
