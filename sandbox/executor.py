@@ -124,8 +124,15 @@ def send_to_worker(
 class SandboxSession:
     """Persistent sandbox process used by the interactive REPL."""
 
-    def __init__(self, config: SandboxConfig):
+    def __init__(
+        self,
+        config: SandboxConfig,
+        mcp_tools: list[dict] | None = None,
+        mcp_manual: str = "",
+        mcp_handler=None,
+    ):
         self.config = config
+        self.mcp_handler = mcp_handler
         self.process = subprocess.Popen(
             [
                 "unshare",
@@ -147,7 +154,11 @@ class SandboxSession:
         )
 
         self.process.stdin.write(
-            json.dumps({"config": config.model_dump()}) + "\n"
+            json.dumps({
+                "config": config.model_dump(),
+                "mcp_tools": mcp_tools or [],
+                "mcp_manual": mcp_manual,
+            }) + "\n"
         )
         self.process.stdin.flush()
 
@@ -195,15 +206,38 @@ class SandboxSession:
                     "message": "Execution timed out.",
                 }
 
-            response_line = self.process.stdout.readline()
-            if not response_line:
-                error = self.process.stderr.read().strip()
-                return {
-                    "status": "error",
-                    "message": error or "Sandbox process exited.",
-                }
+            while True:
+                response_line = self.process.stdout.readline()
+                if not response_line:
+                    error = self.process.stderr.read().strip()
+                    return {
+                        "status": "error",
+                        "message": error or "Sandbox process exited.",
+                    }
 
-            return json.loads(response_line)
+                response = json.loads(response_line)
+                if response.get("status") != "mcp_call":
+                    return response
+
+                try:
+                    if self.mcp_handler is None:
+                        raise RuntimeError("No MCP server is connected.")
+                    result = self.mcp_handler(
+                        response["method"],
+                        response.get("params", {}),
+                    )
+                    mcp_response = {
+                        "status": "mcp_result",
+                        "result": result,
+                    }
+                except Exception as error:
+                    mcp_response = {
+                        "status": "mcp_result",
+                        "error": str(error),
+                    }
+
+                self.process.stdin.write(json.dumps(mcp_response) + "\\n")
+                self.process.stdin.flush()
 
         except (BrokenPipeError, OSError, json.JSONDecodeError) as error:
             self._terminate()
