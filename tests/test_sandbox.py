@@ -1204,11 +1204,14 @@ def test_mcp_stdio_client_end_to_end(tmp_path):
 
     server_file = tmp_path / "mcp_server.py"
     server_file.write_text(
+        "from pydantic import BaseModel\n"
         "from mcp.server import MCPServer\n"
+        "class Sum(BaseModel):\n"
+        "    result: int\n"
         "mcp = MCPServer('Agent Smith test server')\n"
         "@mcp.tool()\n"
-        "def add(a: int, b: int) -> int:\n"
-        "    return a + b\n"
+        "def add(a: int, b: int) -> Sum:\n"
+        "    return Sum(result=a + b)\n"
         "@mcp.resource('demo://status')\n"
         "def status() -> str:\n"
         "    return 'ready'\n"
