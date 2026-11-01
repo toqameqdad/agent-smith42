@@ -107,50 +107,56 @@ def add_clone_namespace_rules(lib, context: int) -> None:
             )
 
 
-def create_safe_builtins(authorized_imports: list[str]) -> dict:
+def create_safe_builtins(
+    authorized_imports: list[str],
+    allowed_directories: list[str],
+) -> dict:
     """
-    Create restricted builtins and an import function limited to the
-    configured module allowlist.
+    Create a practical set of restricted builtins, including a guarded open().
     """
     allowed_names = [
-        "print",
-        "len",
-        "range",
-        "sum",
-        "min",
-        "max",
-        "abs",
-        "enumerate",
-        "zip",
+        "print", "len", "range", "sum", "min", "max", "abs",
+        "enumerate", "zip", "bool", "dict", "list", "tuple", "set",
+        "frozenset", "int", "float", "str", "bytes", "bytearray",
+        "complex", "isinstance", "issubclass", "type", "object",
+        "super", "property", "classmethod", "staticmethod",
+        "__build_class__", "all", "any", "sorted", "reversed",
+        "iter", "next", "map", "filter", "callable", "chr", "ord",
+        "hex", "oct", "bin", "divmod", "pow", "round", "repr",
+        "format", "ascii", "hash", "id", "slice",
+        "Exception", "BaseException", "ValueError", "TypeError",
+        "RuntimeError", "KeyError", "IndexError", "AttributeError",
+        "ImportError", "ModuleNotFoundError", "NameError",
+        "ZeroDivisionError", "StopIteration", "AssertionError",
+        "NotImplementedError", "MemoryError", "OverflowError",
     ]
 
-    def safe_import(
-        name,
-        globals=None,
-        locals=None,
-        fromlist=(),
-        level=0,
-    ):
+    def safe_import(name, globals=None, locals=None, fromlist=(), level=0):
         if not isinstance(name, str) or level != 0:
             raise ImportError("Import is not allowed")
-
         if not is_import_allowed(name, authorized_imports):
             raise ImportError(f"Import of '{name}' is not allowed")
+        return builtins.__import__(name, globals, locals, fromlist, level)
 
-        return builtins.__import__(
-            name,
-            globals,
-            locals,
-            fromlist,
-            level,
+    def safe_open(file, mode="r", buffering=-1, encoding=None,
+                  errors=None, newline=None):
+        if not isinstance(file, (str, bytes, Path)):
+            raise ValueError("File descriptors and custom path objects are not allowed")
+
+        path = Path(file)
+        writing = any(flag in mode for flag in ("w", "a", "x", "+"))
+        operation = "create" if writing else "read"
+
+        if not is_path_allowed(str(path), allowed_directories, operation):
+            raise PermissionError(f"Access to '{path}' is not allowed")
+
+        return builtins.open(
+            path, mode, buffering, encoding, errors, newline
         )
 
-    safe_builtins = {
-        name: getattr(builtins, name)
-        for name in allowed_names
-    }
+    safe_builtins = {name: getattr(builtins, name) for name in allowed_names}
     safe_builtins["__import__"] = safe_import
-
+    safe_builtins["open"] = safe_open
     return safe_builtins
 
 
