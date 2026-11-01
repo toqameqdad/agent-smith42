@@ -8,6 +8,7 @@ from pydantic import ValidationError
 
 from sandbox.config import SandboxConfig
 from sandbox.executor import SandboxSession
+from sandbox.mcp_client import MCPClient
 
 
 def load_config(config_path: str | None) -> SandboxConfig:
@@ -24,12 +25,17 @@ def load_config(config_path: str | None) -> SandboxConfig:
         raise ValueError(f"Invalid sandbox configuration: {error}") from error
 
 
-def run_repl(config: SandboxConfig) -> int:
+def run_repl(config: SandboxConfig, mcp_client: MCPClient | None = None) -> int:
     """Run a persistent, isolated Python REPL."""
     print("Agent Smith sandbox. Type 'exit' or press Ctrl+D to quit.")
 
     try:
-        with SandboxSession(config) as session:
+        with SandboxSession(
+            config,
+            mcp_tools=mcp_client.tools if mcp_client else [],
+            mcp_manual=mcp_client.build_manual() if mcp_client else "",
+            mcp_handler=mcp_client.handle_call if mcp_client else None,
+        ) as session:
             lines: list[str] = []
 
             while True:
@@ -86,6 +92,17 @@ def main(argv: list[str] | None = None) -> int:
         nargs="?",
         help="Optional JSON sandbox configuration file.",
     )
+    transport = parser.add_mutually_exclusive_group()
+    transport.add_argument(
+        "--mcp-stdio",
+        metavar="COMMAND",
+        help="Connect to an MCP server launched by a stdio command.",
+    )
+    transport.add_argument(
+        "--mcp-server",
+        metavar="URL",
+        help="Connect to an MCP server using Streamable HTTP.",
+    )
     args = parser.parse_args(argv)
 
     try:
@@ -94,7 +111,19 @@ def main(argv: list[str] | None = None) -> int:
         print(error, file=sys.stderr)
         return 2
 
-    return run_repl(config)
+    if not args.mcp_stdio and not args.mcp_server:
+        return run_repl(config)
+
+    try:
+        with MCPClient(
+            stdio_command=args.mcp_stdio,
+            server_url=args.mcp_server,
+        ) as mcp_client:
+            print(mcp_client.build_manual())
+            return run_repl(config, mcp_client)
+    except Exception as error:
+        print(f"MCP connection error: {error}", file=sys.stderr)
+        return 1
 
 
 if __name__ == "__main__":
