@@ -1086,3 +1086,30 @@ def test_mcp_sdk_client_imports():
 
     assert Client is not None
     assert StdioServerParameters is not None
+
+
+
+def test_mcp_discovery_reads_all_pages():
+    """Verify MCP discovery follows next-cursor pagination."""
+    import asyncio
+    from types import SimpleNamespace
+    from sandbox.mcp_client import MCPClient
+
+    class FakeMCP:
+        async def list_tools(self, cursor=None):
+            if cursor is None:
+                return SimpleNamespace(
+                    tools=[{"name": "first"}],
+                    nextCursor="page-2",
+                )
+            return SimpleNamespace(
+                tools=[{"name": "second"}],
+                nextCursor=None,
+            )
+
+    client = MCPClient.__new__(MCPClient)
+    client._client = FakeMCP()
+
+    tools = asyncio.run(client._safe_list("list_tools", "tools"))
+
+    assert [tool["name"] for tool in tools] == ["first", "second"]
