@@ -5,6 +5,7 @@ def run(
     user_code: str,
     security_source: str,
     authorized_imports: list[str],
+    allowed_directories: list[str],
 ) -> None:
     """
     Install the trusted security policy, then execute user code with
@@ -32,7 +33,7 @@ def run(
         "__name__": "__main__",
         "__builtins__": security_namespace[
             "create_safe_builtins"
-        ](authorized_imports),
+        ](authorized_imports, allowed_directories),
     }
 
     exec(
