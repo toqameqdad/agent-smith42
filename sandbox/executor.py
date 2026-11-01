@@ -89,7 +89,7 @@ def send_to_worker(
                 sys.executable,
                 "-m",
                 "sandbox.worker",
-            ]
+            ],
             input=json.dumps(request),
             capture_output=True,
             text=True,
