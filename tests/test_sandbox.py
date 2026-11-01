@@ -1121,15 +1121,15 @@ def test_one_shot_final_answer_is_captured():
     import subprocess
 
     security_source = (
-        "def apply_worker_seccomp_policy(): pass\\n"
-        "def apply_landlock(*args): pass\\n"
-        "def create_safe_builtins(*args): return __builtins__\\n"
+        "def apply_worker_seccomp_policy(): pass\n"
+        "def apply_landlock(*args): pass\n"
+        "def create_safe_builtins(*args): return __builtins__\n"
     )
     user_code = 'print("before"); final_answer("finished"); print("after")'
     code = (
-        "from sandbox.bootstrap import run\\n"
-        f"security_source = {security_source!r}\\n"
-        f"run({user_code!r}, security_source, [], [])\\n"
+        "from sandbox.bootstrap import run\n"
+        f"security_source = {security_source!r}\n"
+        f"run({user_code!r}, security_source, [], [])\n"
     )
 
     result = subprocess.run(
