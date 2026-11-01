@@ -63,7 +63,7 @@ def run(
         )
     except FinalAnswerSignal as signal:
         sys.stdout.write(
-            "\\x1eAGENT_SMITH_FINAL_ANSWER:"
+            "__AGENT_SMITH_FINAL_ANSWER__:"
             + json.dumps(signal.answer)
             + "\\n"
         )
