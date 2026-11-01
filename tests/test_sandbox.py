@@ -1018,3 +1018,60 @@ def test_interactive_bootstrap_code_is_valid_and_injects_final_answer():
     assert "user_namespace['final_answer'] = final_answer" in source
     assert "for line in sys.stdin" in source
     assert "FinalAnswerSignal" in source
+
+
+
+def test_interactive_bootstrap_exposes_dynamic_mcp_tools():
+    """Verify MCP tool names and schemas are injected into the sandbox."""
+    from sandbox.worker import build_interactive_bootstrap_code
+
+    source = build_interactive_bootstrap_code(
+        ["json"],
+        ["/testbed", "/tmp/agent"],
+        [
+            {
+                "name": "search_docs",
+                "description": "Search project documentation.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {"query": {"type": "string"}},
+                    "required": ["query"],
+                },
+            }
+        ],
+        "Dynamic MCP manual",
+    )
+
+    compile(source, "<mcp-bootstrap-test>", "exec")
+    assert "search_docs" in source
+    assert "Dynamic MCP manual" in source
+    assert "mcp_read_resource" in source
+    assert "mcp_get_prompt" in source
+
+
+def test_mcp_manual_uses_connected_server_schemas():
+    """Verify the MCP manual is generated from live tool/resource/prompt data."""
+    from sandbox.mcp_client import MCPClient
+
+    client = MCPClient.__new__(MCPClient)
+    client.tools = [
+        {
+            "name": "search_docs",
+            "description": "Search documentation.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {"query": {"type": "string"}},
+            },
+        }
+    ]
+    client.resources = [{"name": "project files", "uri": "file:///project"}]
+    client.prompts = [{"name": "review", "description": "Review a change."}]
+
+    manual = client.build_manual()
+
+    assert "search_docs" in manual
+    assert '"query"' in manual
+    assert "mcp_read_resource(uri)" in manual
+    assert "mcp_get_prompt(name, arguments={})" in manual
+    assert "file:///project" in manual
+    assert "review" in manual
