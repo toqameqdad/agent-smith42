@@ -78,11 +78,22 @@ class MCPClient:
         self.prompts = [_to_json_value(item) for item in prompts]
 
     async def _safe_list(self, method_name: str, field_name: str) -> list:
+        items = []
+        cursor = None
         try:
-            result = await getattr(self._client, method_name)()
-            return list(getattr(result, field_name, []) or [])
+            for _ in range(100):
+                arguments = {"cursor": cursor} if cursor else {}
+                result = await getattr(self._client, method_name)(**arguments)
+                items.extend(getattr(result, field_name, []) or [])
+                cursor = (
+                    getattr(result, "nextCursor", None)
+                    or getattr(result, "next_cursor", None)
+                )
+                if not cursor:
+                    return items
         except Exception:
-            return []
+            return items
+        raise RuntimeError(f"Too many pages returned by MCP {method_name}.")
 
     async def _dispatch(self, method: str, params: dict[str, Any]) -> Any:
         if method == "call_tool":
@@ -91,11 +102,15 @@ class MCPClient:
                 arguments=params.get("arguments", {}),
             )
         elif method == "list_resources":
-            result = await self._client.list_resources()
+            return _to_json_value(
+                await self._safe_list("list_resources", "resources")
+            )
         elif method == "read_resource":
             result = await self._client.read_resource(params["uri"])
         elif method == "list_prompts":
-            result = await self._client.list_prompts()
+            return _to_json_value(
+                await self._safe_list("list_prompts", "prompts")
+            )
         elif method == "get_prompt":
             result = await self._client.get_prompt(
                 params["name"],
@@ -126,8 +141,9 @@ class MCPClient:
                 schema = tool.get("inputSchema") or tool.get("input_schema") or {}
                 sections.append(
                     f"### {name}\n{description}\n"
-                    f"Call it as a Python function using keyword arguments when its name is a valid identifier. "
-                    f"Otherwise use call_mcp_tool({name!r}, **arguments).\n"
+                    f"Call it as a Python function using keyword arguments if the wrapper is exposed. "
+                    f"If the name is invalid or conflicts with a builtin, use "
+                    f"call_mcp_tool({name!r}, **arguments).\n"
                     f"Input schema:\n{json.dumps(schema, indent=2, ensure_ascii=False)}"
                 )
         else:
