@@ -275,7 +275,7 @@ def test_build_chroot_command_with_bootstrap(tmp_path):
     assert command[-2:] == ["-c", bootstrap]
     assert command[0] == "chroot"
     assert command[1] == str(root)
-    
+
 
 def test_runtime_ready(tmp_path):
     """Verify that a prepared runtime passes the readiness check."""
@@ -687,3 +687,14 @@ def test_set_no_new_privs():
     )
 
     assert result == 1
+
+
+def test_seccomp_bootstrap_structure():
+    from sandbox.worker import build_bootstrap_code
+
+    bootstrap = build_bootstrap_code()
+
+    assert "sys.stdin.read()" in bootstrap
+    assert "set_no_new_privs" in bootstrap
+    assert "seccomp_load" in bootstrap
+    assert "exec(" in bootstrap

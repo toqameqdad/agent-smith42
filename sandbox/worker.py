@@ -19,6 +19,27 @@ from sandbox.security import check_imports
 
 SANDBOX_ROOT = Path("/tmp/agent-smith-runtime")
 
+def build_bootstrap_code() -> str:
+    """
+    Build trusted bootstrap code for execution inside chroot.
+    """
+
+    bootstrap_path = Path(__file__).with_name("bootstrap.py")
+    security_path = Path(__file__).with_name("security.py")
+
+    bootstrap_source = bootstrap_path.read_text(encoding="utf-8")
+    security_source = security_path.read_text(encoding="utf-8")
+
+    return (
+        "import sys\n"
+        f"bootstrap_source = {bootstrap_source!r}\n"
+        f"security_source = {security_source!r}\n"
+        "namespace = {'__name__': '_trusted_bootstrap'}\n"
+        "exec(compile(bootstrap_source, '<trusted-bootstrap>', 'exec'), namespace)\n"
+        "user_code = sys.stdin.read()\n"
+        "namespace['run'](user_code, security_source)\n"
+    )
+
 
 def is_runtime_ready(root: Path) -> bool:
     required_paths = [
@@ -87,9 +108,12 @@ def execute_in_sandbox(
 
         mount_runtime_libraries(SANDBOX_ROOT)
 
-        command = build_chroot_command(SANDBOX_ROOT, code)
+        bootstrap_code = build_bootstrap_code()
+        command = build_chroot_command(SANDBOX_ROOT, bootstrap_code)
+
         result = subprocess.run(
             command,
+            input=code,
             capture_output=True,
             text=True,
             timeout=config.max_execution_time_seconds,
