@@ -111,7 +111,7 @@ def mount_runtime_libraries(
     for source, destination in mount_points:
         _run_mount_command(["--bind", str(source), str(destination)])
         _run_mount_command([
-            "--remount", "--bind", "ro", str(destination)
+            "-o", "remount,bind,ro", str(destination)
         ])
 
     writable_targets: list[Path] = []
@@ -156,12 +156,12 @@ def mount_runtime_libraries(
         _run_mount_command(["--bind", str(target), str(target)])
 
     _run_mount_command([
-        "--remount", "--bind", "ro", str(root)
+        "-o", "remount,bind,ro", str(root)
     ])
 
     for target in writable_targets:
         _run_mount_command([
-            "--remount", "--bind", "rw", str(target)
+            "-o", "remount,bind,rw", str(target)
         ])
 
 
