@@ -269,7 +269,7 @@ def build_interactive_bootstrap_code(
         "security_namespace = {'__name__': '_trusted_security'}\n"
         "exec(compile(security_source, '<trusted-security>', 'exec'), security_namespace)\n"
         "security_namespace['apply_worker_seccomp_policy']()\n"
-        "security_namespace['apply_landlock'](allowed_directories, ['/bin', '/lib', '/lib64'])\n"
+        "security_namespace['apply_landlock'](allowed_directories, ['/bin', '/lib', '/lib64', '/usr/lib', '/usr/lib64', '/usr/local/lib'])\n"
         "user_namespace = {'__name__': '__main__', '__builtins__': security_namespace['create_safe_builtins'](authorized_imports, allowed_directories)}\n"
         "class FinalAnswerSignal(Exception):\n"
         "    def __init__(self, answer): self.answer = answer\n"
