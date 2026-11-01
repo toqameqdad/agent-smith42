@@ -93,7 +93,7 @@ def send_to_worker(
             input=json.dumps(request),
             capture_output=True,
             text=True,
-            timeout=5,
+            timeout=config.max_execution_time_seconds + 15,
         )
 
         if result.returncode != 0:
