@@ -402,7 +402,7 @@ def test_mount_runtime_libraries_sets_read_only_root_and_writable_allowlist(
     assert ["--bind", str(root.resolve()), str(root.resolve())] in commands
     assert [
         "-o", "remount,bind,ro",
-        str(root.resolve() / "lib" / "libexample.so"),
+        str(root.resolve() / Path(str(library).lstrip("/"))),
     ] in commands
     assert [
         "-o", "remount,bind,ro", str(root.resolve())
