@@ -71,6 +71,7 @@ def run_repl(config: SandboxConfig, mcp_client: MCPClient | None = None) -> int:
                     print(f"Error: {response.get('message', 'Unknown error')}")
                 elif response.get("status") == "final_answer":
                     print(f"Final answer: {response.get('answer', '')}")
+                    break
 
                 if session.process.poll() is not None:
                     break
