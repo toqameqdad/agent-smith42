@@ -78,21 +78,26 @@ class MCPClient:
         self.prompts = [_to_json_value(item) for item in prompts]
 
     async def _safe_list(self, method_name: str, field_name: str) -> list:
+        capabilities = getattr(self._client, "server_capabilities", None)
+        if (
+            capabilities is not None
+            and getattr(capabilities, field_name, None) is None
+        ):
+            return []
+
         items = []
         cursor = None
-        try:
-            for _ in range(100):
-                arguments = {"cursor": cursor} if cursor else {}
-                result = await getattr(self._client, method_name)(**arguments)
-                items.extend(getattr(result, field_name, []) or [])
-                cursor = (
-                    getattr(result, "nextCursor", None)
-                    or getattr(result, "next_cursor", None)
-                )
-                if not cursor:
-                    return items
-        except Exception:
-            return items
+        for _ in range(100):
+            arguments = {"cursor": cursor} if cursor else {}
+            result = await getattr(self._client, method_name)(**arguments)
+            items.extend(getattr(result, field_name, []) or [])
+            cursor = (
+                getattr(result, "nextCursor", None)
+                or getattr(result, "next_cursor", None)
+            )
+            if not cursor:
+                return items
+
         raise RuntimeError(f"Too many pages returned by MCP {method_name}.")
 
     async def _dispatch(self, method: str, params: dict[str, Any]) -> Any:
