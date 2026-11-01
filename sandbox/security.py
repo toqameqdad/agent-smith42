@@ -140,7 +140,7 @@ def create_safe_builtins(
 
     def safe_open(file, mode="r", buffering=-1, encoding=None,
                   errors=None, newline=None):
-        if not isinstance(file, (str, bytes, Path)):
+        if not isinstance(file, (str, Path)):
             raise ValueError("File descriptors and custom path objects are not allowed")
 
         path = Path(file)
