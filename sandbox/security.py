@@ -33,7 +33,6 @@ class ScmpArgCmp(ctypes.Structure):
     ]
 
 
-
 def set_no_new_privs() -> None:
     """
     Prevent the process from gaining new privileges.
@@ -108,12 +107,10 @@ def add_clone_namespace_rules(lib, context: int) -> None:
             )
 
 
-def create_safe_builtins() -> dict:
+def create_safe_builtins(authorized_imports: list[str]) -> dict:
     """
-    Create a limited dictionary of Python built-in functions.
-
-    Returns:
-        dict: Selected built-in functions for controlled execution.
+    Create restricted builtins and an import function limited to the
+    configured module allowlist.
     """
     allowed_names = [
         "print",
@@ -127,22 +124,42 @@ def create_safe_builtins() -> dict:
         "zip",
     ]
 
-    return {
+    def safe_import(
+        name,
+        globals=None,
+        locals=None,
+        fromlist=(),
+        level=0,
+    ):
+        if not isinstance(name, str) or level != 0:
+            raise ImportError("Import is not allowed")
+
+        if not is_import_allowed(name, authorized_imports):
+            raise ImportError(f"Import of '{name}' is not allowed")
+
+        return builtins.__import__(
+            name,
+            globals,
+            locals,
+            fromlist,
+            level,
+        )
+
+    safe_builtins = {
         name: getattr(builtins, name)
         for name in allowed_names
     }
+    safe_builtins["__import__"] = safe_import
+
+    return safe_builtins
+
 
 def is_import_allowed(
     module_name: str,
     authorized_imports: list[str],
-    ) -> bool:
+) -> bool:
     """
-    Check if the import of a module is allowed based on a predefined list of allowed modules.
-
-    Args:
-        module_name (str): The name of the module to check.
-        authorized_imports (list[str]): A list of authorized module names or patterns.
-
+    Check if the import of a module is allowed based on a predefined list.
     """
     for allowed in authorized_imports:
         if module_name == allowed:
@@ -153,7 +170,7 @@ def is_import_allowed(
 
             if module_name.startswith(parent + "."):
                 return True
-            
+
     return False
 
 
@@ -161,14 +178,9 @@ def is_path_allowed(
     file_path: str,
     allowed_directories: list[str],
     operation: str = "read"
-    ) -> bool:
+) -> bool:
     """
-    Check if the file path is allowed based on a predefined list of allowed directories.
-
-    Args:
-        file_path (str): The file path to check.
-        allowed_directories (list[str]): A list of allowed directory paths.
-        operation (str): The operation being performed (read or create).
+    Check if the file path is allowed based on a predefined list of directories.
     """
     if operation not in ["read", "create"]:
         return False
@@ -194,6 +206,7 @@ def is_path_allowed(
             continue
 
     return False
+
 
 def check_imports(
     code: str,
@@ -232,12 +245,12 @@ def check_imports(
 
         elif isinstance(node, ast.Call):
 
-            # Block __import__()
+            # Block direct calls to __import__ in submitted source.
             if isinstance(node.func, ast.Name):
                 if node.func.id == "__import__":
                     return False
 
-            # Block importlib.import_module()
+            # Block importlib.import_module().
             if isinstance(node.func, ast.Attribute):
                 if (
                     node.func.attr == "import_module"
@@ -260,20 +273,13 @@ def check_imports(
     return True
 
 
-
 def apply_seccomp_filter(
     blocked_syscalls: list[str],
     block_namespace_clone: bool = False,
     enosys_syscalls: list[str] | None = None,
-    ) -> None:
+) -> None:
     """
     Apply a Seccomp filter that denies selected Linux system calls.
-
-    Args:
-        blocked_syscalls (list[str]): System call names to deny.
-
-    Raises:
-        RuntimeError: If filter creation or installation fails.
     """
     lib = ctypes.CDLL("libseccomp.so.2", use_errno=True)
 
@@ -356,13 +362,9 @@ def apply_seccomp_filter(
         lib.seccomp_release(context)
 
 
-
 def get_namespace_clone_flags() -> int:
     """
     Return Linux clone flags used to create new namespaces.
-
-    Returns:
-        int: Bitmask of namespace creation flags.
     """
     clone_newns = 0x00020000
     clone_newcgroup = 0x02000000
@@ -386,9 +388,6 @@ def get_namespace_clone_flags() -> int:
 def get_namespace_clone_flag_values() -> list[int]:
     """
     Return individual Linux namespace creation flags for clone.
-
-    Returns:
-        list[int]: Individual namespace creation flag values.
     """
     return [
         0x00020000,  # CLONE_NEWNS
@@ -399,7 +398,6 @@ def get_namespace_clone_flag_values() -> list[int]:
         0x20000000,  # CLONE_NEWPID
         0x40000000,  # CLONE_NEWNET
     ]
-
 
 
 def apply_worker_seccomp_policy() -> None:
