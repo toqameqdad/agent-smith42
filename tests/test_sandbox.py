@@ -106,7 +106,8 @@ def test_safe_builtins_support_class_definitions():
         "__builtins__": create_safe_builtins(["math"], ["/tmp"]),
     }
 
-    exec("class Example:\\n    pass", namespace)
+    exec("""class Example:
+    pass""", namespace)
     assert namespace["Example"]().__class__.__name__ == "Example"
 
 
