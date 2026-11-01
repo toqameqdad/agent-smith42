@@ -19,13 +19,13 @@ def test_session_relays_mcp_calls_to_handler(monkeypatch):
     class FakeStdout:
         def __init__(self):
             self.lines = iter([
-                '{"status": "ready"}\\n',
+                '{"status": "ready"}\n',
                 json.dumps({
                     "status": "mcp_call",
                     "method": "call_tool",
                     "params": {"name": "sum", "arguments": {"a": 20, "b": 22}},
-                }) + "\\n",
-                json.dumps({"status": "success", "output": ""}) + "\\n",
+                }) + "\n",
+                json.dumps({"status": "success", "output": ""}) + "\n",
             ])
 
         def readline(self):
