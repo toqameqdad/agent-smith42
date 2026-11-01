@@ -172,6 +172,7 @@ def build_chroot_command(
         "/bin/python3.10",
         "-I",
         "-S",
+        "-B",
         "-c",
         code,
     ]
