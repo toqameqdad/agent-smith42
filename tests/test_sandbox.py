@@ -860,3 +860,71 @@ def test_seccomp_bootstrap_structure():
     assert "set_no_new_privs" in bootstrap
     assert "seccomp_load" in bootstrap
     assert "exec(" in bootstrap
+
+
+
+def test_landlock_restricts_filesystem_access(tmp_path):
+    """Verify Landlock permits the allowlist and blocks other filesystem paths."""
+    import subprocess
+    import textwrap
+
+    allowed_dir = tmp_path / "allowed"
+    outside_dir = tmp_path / "outside"
+    allowed_dir.mkdir()
+    outside_dir.mkdir()
+
+    allowed_file = allowed_dir / "read.txt"
+    outside_file = outside_dir / "secret.txt"
+    allowed_file.write_text("allowed")
+    outside_file.write_text("secret")
+
+    code = textwrap.dedent("""
+        import sys
+        from sandbox.security import apply_landlock
+
+        allowed_dir, outside_dir = sys.argv[1:3]
+        apply_landlock([allowed_dir], [])
+
+        with open(allowed_dir + "/read.txt") as file:
+            assert file.read() == "allowed"
+
+        with open(allowed_dir + "/created.txt", "w") as file:
+            file.write("created")
+
+        try:
+            open(outside_dir + "/secret.txt").read()
+        except PermissionError:
+            pass
+        else:
+            raise AssertionError("Landlock allowed reading outside the allowlist")
+
+        try:
+            open(outside_dir + "/created.txt", "w")
+        except PermissionError:
+            pass
+        else:
+            raise AssertionError("Landlock allowed writing outside the allowlist")
+
+        print("Landlock filesystem restrictions passed")
+    """)
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-B",
+            "-c",
+            code,
+            str(allowed_dir),
+            str(outside_dir),
+        ],
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+
+    assert result.returncode == 0, (
+        f"STDOUT:\\n{result.stdout}\\nSTDERR:\\n{result.stderr}"
+    )
+    assert "Landlock filesystem restrictions passed" in result.stdout
+    assert (allowed_dir / "created.txt").read_text() == "created"
+    assert not (outside_dir / "created.txt").exists()
