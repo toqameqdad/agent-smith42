@@ -21,6 +21,19 @@ BLOCKED_WORKER_SYSCALLS = [
     "setgroups",
     "ptrace",
     "bpf",
+    "socket",
+    "socketpair",
+    "connect",
+    "accept",
+    "accept4",
+    "bind",
+    "listen",
+    "sendto",
+    "recvfrom",
+    "sendmsg",
+    "recvmsg",
+    "shutdown",
+    "io_uring_setup",
 ]
 
 
