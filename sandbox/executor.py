@@ -236,7 +236,7 @@ class SandboxSession:
                         "error": str(error),
                     }
 
-                self.process.stdin.write(json.dumps(mcp_response) + "\\n")
+                self.process.stdin.write(json.dumps(mcp_response) + "\n")
                 self.process.stdin.flush()
 
         except (BrokenPipeError, OSError, json.JSONDecodeError) as error:
