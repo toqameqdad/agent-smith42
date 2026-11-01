@@ -13,7 +13,6 @@ from sandbox.environment import (
     get_shared_libraries,
     prepare_library_mount_points,
     build_chroot_command,
-    build_restricted_command,
 )
 from sandbox.security import check_imports
 
@@ -88,8 +87,6 @@ def execute_in_sandbox(
         mount_runtime_libraries(SANDBOX_ROOT)
 
         command = build_chroot_command(SANDBOX_ROOT, code)
-        command = build_restricted_command(command)
-
         result = subprocess.run(
             command,
             capture_output=True,
