@@ -84,11 +84,12 @@ def send_to_worker(
                 "unshare",
                 "--user",
                 "--map-root-user",
+                "--mount",
                 "--net",
                 sys.executable,
                 "-m",
                 "sandbox.worker",
-            ],
+            ]
             input=json.dumps(request),
             capture_output=True,
             text=True,
