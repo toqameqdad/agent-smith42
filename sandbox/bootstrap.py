@@ -31,7 +31,7 @@ def run(
     security_namespace["apply_worker_seccomp_policy"]()
     security_namespace["apply_landlock"](
         allowed_directories,
-        ["/bin", "/lib", "/lib64"],
+        ["/bin", "/lib", "/lib64", "/usr/lib", "/usr/lib64", "/usr/local/lib"],
     )
 
     user_namespace = {
