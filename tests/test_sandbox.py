@@ -929,3 +929,50 @@ def test_landlock_restricts_filesystem_access(tmp_path):
     assert "Landlock filesystem restrictions passed" in result.stdout
     assert (allowed_dir / "created.txt").read_text() == "created"
     assert not (outside_dir / "created.txt").exists()
+
+
+
+def test_worker_seccomp_blocks_network_syscalls():
+    """Verify the worker policy blocks direct network socket creation."""
+    import subprocess
+    import sys
+    import textwrap
+
+    code = textwrap.dedent("""
+        import ctypes
+        import errno
+
+        from sandbox.security import apply_worker_seccomp_policy
+
+        libseccomp = ctypes.CDLL("libseccomp.so.2")
+        libseccomp.seccomp_syscall_resolve_name.argtypes = [ctypes.c_char_p]
+        libseccomp.seccomp_syscall_resolve_name.restype = ctypes.c_int
+
+        socket_number = libseccomp.seccomp_syscall_resolve_name(b"socket")
+        assert socket_number >= 0
+
+        apply_worker_seccomp_policy()
+
+        libc = ctypes.CDLL(None, use_errno=True)
+        libc.syscall.restype = ctypes.c_long
+
+        ctypes.set_errno(0)
+        result = libc.syscall(socket_number, 2, 1, 0)
+        error = ctypes.get_errno()
+
+        assert result == -1
+        assert error == errno.EPERM
+        print("Network syscall restriction passed")
+    """)
+
+    result = subprocess.run(
+        [sys.executable, "-c", code],
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+
+    assert result.returncode == 0, (
+        f"STDOUT:\\n{result.stdout}\\nSTDERR:\\n{result.stderr}"
+    )
+    assert "Network syscall restriction passed" in result.stdout
