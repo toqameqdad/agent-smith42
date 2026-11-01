@@ -1119,18 +1119,17 @@ def test_mcp_discovery_reads_all_pages():
 def test_one_shot_final_answer_is_captured():
     """Verify final_answer stops execution and emits the worker protocol marker."""
     import subprocess
-    import textwrap
 
     security_source = (
-        "def apply_worker_seccomp_policy(): pass\n"
-        "def apply_landlock(*args): pass\n"
-        "def create_safe_builtins(*args): return __builtins__\n"
+        "def apply_worker_seccomp_policy(): pass\\n"
+        "def apply_landlock(*args): pass\\n"
+        "def create_safe_builtins(*args): return __builtins__\\n"
     )
-    code = textwrap.dedent(
-        "from sandbox.bootstrap import run\n"
-        f"security_source = {security_source!r}\n"
-        "run('print(\"before\'); final_answer(\"finished\'); print(\"after\")', "
-        "security_source, [], [])\n"
+    user_code = 'print("before"); final_answer("finished"); print("after")'
+    code = (
+        "from sandbox.bootstrap import run\\n"
+        f"security_source = {security_source!r}\\n"
+        f"run({user_code!r}, security_source, [], [])\\n"
     )
 
     result = subprocess.run(
@@ -1142,5 +1141,5 @@ def test_one_shot_final_answer_is_captured():
 
     assert result.returncode == 0, result.stderr
     assert "before" in result.stdout
-    assert "__AGENT_SMITH_FINAL_ANSWER__: \"finished\"" in result.stdout
+    assert '__AGENT_SMITH_FINAL_ANSWER__:"finished"' in result.stdout
     assert "after" not in result.stdout
