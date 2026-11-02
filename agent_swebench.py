@@ -87,6 +87,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--api-key-env", default="OPENROUTER_API_KEY")
     parser.add_argument("--max-iterations", type=int, default=30)
     args = parser.parse_args(argv)
+    if args.max_iterations < 1:
+        parser.error("--max-iterations must be at least 1")
+    max_iterations = min(args.max_iterations, 30)
     signal.signal(signal.SIGTERM, lambda signum, frame: sys.exit(128 + signum))
 
     container_name = "agent-smith-" + re.sub(
@@ -139,7 +142,7 @@ def main(argv: list[str] | None = None) -> int:
                         model_name=args.model_name,
                         api_url=args.provider_url,
                         sandbox_manual=mcp_client.build_manual(),
-                        max_iterations=args.max_iterations,
+                        max_iterations=max_iterations,
                         max_input_tokens=300000,
                         max_output_tokens=10000,
                         timeout_seconds=900,
