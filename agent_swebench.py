@@ -86,6 +86,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--provider-name", default="default")
     parser.add_argument("--api-key-env", default="OPENROUTER_API_KEY")
     parser.add_argument("--max-iterations", type=int, default=30)
+    parser.add_argument(
+        "--prompt-variant",
+        choices=("standard", "compact"),
+        default="standard",
+    )
     args = parser.parse_args(argv)
     if args.max_iterations < 1:
         parser.error("--max-iterations must be at least 1")
@@ -146,6 +151,7 @@ def main(argv: list[str] | None = None) -> int:
                         max_input_tokens=300000,
                         max_output_tokens=10000,
                         timeout_seconds=900,
+                        prompt_variant=args.prompt_variant,
                     )
                     result = agent.run(
                         task_id=task.instance_id,
