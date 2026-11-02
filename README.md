@@ -33,7 +33,8 @@ Run the unit and integration suite:
 uv run pytest -q
 ```
 
-GitHub Actions also runs the isolated worker and live MCP-over-stdio REPL integration
+GitHub Actions runs the unit suite (including live MCP stdio and Streamable HTTP
+server tests) and runs the isolated worker plus MCP-over-stdio sandbox integration
 inside a privileged Linux container, where user, mount, and network namespaces are
 available.
 
@@ -71,7 +72,7 @@ Connect to a Streamable HTTP MCP server:
 uv run sandbox --mcp-server http://localhost:8000/mcp
 ```
 
-The connected server's tools, resources, prompts, and tool input schemas are discovered at startup. The generated manual is printed in the terminal and exposed inside the sandbox as `sandbox_manual`.
+The connected server's tools, resources, prompts, and tool input schemas are discovered at startup. The generated manual is printed in the terminal and exposed inside the sandbox as `sandbox_manual`. MCP tool execution time is excluded from the sandbox's per-code execution budget.
 
 MCP tools with valid, non-conflicting Python identifiers are injected as callable functions. Use `call_mcp_tool("exact-tool-name", key=value)` for names that cannot be exposed directly.
 
