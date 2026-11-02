@@ -173,3 +173,14 @@ def test_run_tests_executes_configured_evaluation_script(tmp_path, monkeypatch):
     result = run_tests()
     assert result["stdout"] == "evaluation-ok"
     assert result["exit_code"] == 0
+
+
+def test_command_timeout_returns_partial_output_without_type_errors(tmp_path, monkeypatch):
+    root = tmp_path / "repo"
+    root.mkdir()
+    monkeypatch.setenv("TESTBED_PATH", str(root))
+    monkeypatch.setenv("COMMAND_TIMEOUT_SECONDS", "0.05")
+
+    result = run_command("printf started; sleep 1")
+    assert result["exit_code"] == 124
+    assert "timed out" in result["stderr"].lower()
