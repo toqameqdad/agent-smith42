@@ -146,3 +146,15 @@ def test_absolute_testbed_paths_map_to_host_workspace(tmp_path, monkeypatch):
     assert read_file("/testbed/main.py") == "1: answer = 42"
     assert "/testbed/main.py" in list_files("/testbed", "*.py")
     assert "/testbed/main.py:1" in search_code("answer", "*.py")
+
+
+def test_listing_and_search_ignore_symlinks_outside_repository(tmp_path, monkeypatch):
+    root = tmp_path / "repo"
+    root.mkdir()
+    outside = tmp_path / "outside.py"
+    outside.write_text("SECRET_MARKER = 1\n")
+    (root / "escape.py").symlink_to(outside)
+    monkeypatch.setenv("TESTBED_PATH", str(root))
+
+    assert "escape.py" not in list_files(".", "*.py")
+    assert "SECRET_MARKER" not in search_code("SECRET_MARKER", "*.py")
