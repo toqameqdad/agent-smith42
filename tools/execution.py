@@ -56,7 +56,11 @@ def run_command(command: str, workdir: str = ".") -> dict:
         )
         return _result(result.stdout, result.stderr, result.returncode)
     except subprocess.TimeoutExpired as error:
-        return _result(error.stdout or "", (error.stderr or "") + "\nCommand timed out.", 124)
+        return _result(
+            _as_text(error.stdout),
+            _as_text(error.stderr) + "\nCommand timed out.",
+            124,
+        )
 
 
 def run_tests() -> dict:
