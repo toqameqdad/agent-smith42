@@ -88,18 +88,53 @@ def _parse_json_calls(text: str) -> list[str]:
     return calls
 
 
+def _balanced_json_value(text: str) -> str:
+    """Return one complete JSON object/array, including nested values."""
+    text = text.lstrip()
+    if not text or text[0] not in "{[":
+        return text.splitlines()[0].strip() if text else ""
+
+    closing = {"{": "}", "[": "]"}
+    stack: list[str] = []
+    in_string = False
+    escaped = False
+    for index, character in enumerate(text):
+        if in_string:
+            if escaped:
+                escaped = False
+            elif character == "\\\\":
+                escaped = True
+            elif character == '"':
+                in_string = False
+            continue
+
+        if character == '"':
+            in_string = True
+        elif character in closing:
+            stack.append(closing[character])
+        elif character in "}]":
+            if not stack or stack.pop() != character:
+                return text.strip()
+            if not stack:
+                return text[: index + 1]
+
+    return text.strip()
+
+
 def _parse_react_calls(text: str) -> list[str]:
-    pattern = (
-        r"Action:\s*([A-Za-z_][A-Za-z0-9_.-]*)\s*"
-        r"\nAction Input:\s*(\{.*?\}|\[.*?\]|[^\n]+)"
+    pattern = re.compile(
+        r"Action:\\s*([A-Za-z_][A-Za-z0-9_.-]*)\\s*"
+        r"\\nAction Input:\\s*",
+        flags=re.MULTILINE,
     )
     calls: list[str] = []
-    for name, raw in re.findall(pattern, text, flags=re.DOTALL):
+    for match in pattern.finditer(text):
+        raw = _balanced_json_value(text[match.end():])
         try:
             arguments = json.loads(raw)
         except json.JSONDecodeError:
             arguments = {"input": raw.strip()}
-        calls.append(_tool_call(name, arguments))
+        calls.append(_tool_call(match.group(1), arguments))
     return calls
 
 
