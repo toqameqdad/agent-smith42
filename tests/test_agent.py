@@ -195,3 +195,38 @@ def test_llm_client_rotates_api_key_after_rate_limit(monkeypatch):
     assert seen_keys == ["Bearer key-one", "Bearer key-two"]
     assert response.retries == 1
     assert response.input_tokens == 12
+
+
+def test_unclosed_python_fence_is_interpreted_with_warning():
+    fence = chr(96) * 3
+    result = extract_code("Thought: run this\n" + fence + "python\nprint('still valid')")
+    assert result.code == "print('still valid')"
+    assert result.response_format == "python_unclosed"
+    assert "closing code fence was missing" in result.warning
+
+
+def test_orchestrator_preserves_extraction_warning_and_partial_timeout_output():
+    sandbox = FakeSandbox()
+    sandbox.execute = lambda code: {
+        "status": "error",
+        "message": "Execution timed out.",
+        "output": "partial result",
+    }
+    fence = chr(96) * 3
+    llm = FakeLLM([
+        _response("Thought: execute\n" + fence + "python\nprint('start')"),
+        _response(fence + "python\nfinal_answer('solution')\n" + fence),
+    ])
+    agent = AgentOrchestrator(
+        llm_client=llm,
+        sandbox=sandbox,
+        provider_name="test",
+        model_name="test-model",
+        api_url="https://provider.example/v1",
+        max_iterations=2,
+    )
+
+    result = agent.run("task", "mbpp", "Solve it.")
+    assert "closing code fence was missing" in result.steps[0].sandbox_output
+    assert "Execution timed out" in result.steps[0].sandbox_output
+    assert "partial result" in result.steps[0].sandbox_output
