@@ -131,7 +131,7 @@ def extract_code(response: str) -> ExtractionResult:
         flags=re.IGNORECASE | re.DOTALL,
     )
     if unclosed:
-        code = unclosed.group(1).strip()
+        code = unclosed.group(1).split("<end_code>", 1)[0].strip()
         if code:
             try:
                 ast.parse(code)
