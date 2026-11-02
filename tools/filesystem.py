@@ -73,7 +73,7 @@ def edit_file(filepath: str, old_str: str, new_str: str) -> str:
                 f"WARNING: Python syntax error at line {error.lineno}: {error.msg}. "
                 "The edit was saved; fix this before running tests."
             )
-            return "\\n".join(feedback)
+            return "\n".join(feedback)
 
         ruff = shutil.which("ruff")
         if container:
@@ -106,7 +106,7 @@ def edit_file(filepath: str, old_str: str, new_str: str) -> str:
                 feedback.append("Python syntax and ruff checks passed.")
         else:
             feedback.append("Python syntax is valid; ruff is unavailable, so lint was not checked.")
-    return "\\n".join(feedback)
+    return "\n".join(feedback)
 
 
 def list_files(directory: str = ".", pattern: str = "*") -> str:
