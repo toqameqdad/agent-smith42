@@ -254,3 +254,92 @@ def test_system_prompt_variants_support_ablation():
     assert standard != compact
     assert "tool manual" in standard
     assert "tool manual" in compact
+
+
+def test_orchestrator_records_failed_llm_attempts_in_solution_trace():
+    from llm.client import LLMRequestError
+
+    class FailedLLM:
+        def complete(self, messages, provider_name, max_tokens=None, stop=None):
+            raise LLMRequestError(
+                "provider unavailable",
+                attempts=3,
+                request_time_ms=1250.0,
+                api_url="https://provider.example/v1",
+                model_name="test-model",
+            )
+
+    sandbox = FakeSandbox()
+    agent = AgentOrchestrator(
+        llm_client=FailedLLM(),
+        sandbox=sandbox,
+        provider_name="test",
+        model_name="test-model",
+        api_url="https://provider.example/v1",
+        max_iterations=2,
+    )
+
+    result = agent.run("task-1", "mbpp", "Solve the task.")
+
+    assert result.success is False
+    assert result.iterations == 1
+    assert result.total_requests == 3
+    assert result.steps[0].retries == 2
+    assert result.steps[0].request_time_ms == 1250.0
+    assert result.steps[0].api_url == "https://provider.example/v1"
+    assert "failed after 3 attempt(s)" in result.steps[0].sandbox_output
+    assert sandbox.calls == []
+
+
+def test_llm_client_reports_all_failed_attempts(monkeypatch):
+    import httpx
+    import pytest
+
+    from llm.client import LLMClient, LLMRequestError
+    from llm.providers import ProviderConfig
+
+    monkeypatch.setenv("KEYS", "key-one,key-two")
+    seen_keys = []
+
+    class RateLimitedResponse:
+        status_code = 429
+
+        def raise_for_status(self):
+            request = httpx.Request("POST", "https://provider.example/v1/chat/completions")
+            response = httpx.Response(429, request=request)
+            raise httpx.HTTPStatusError("rate limited", request=request, response=response)
+
+    class RateLimitedClient:
+        def __init__(self, timeout):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return None
+
+        def post(self, url, json, headers):
+            seen_keys.append(headers["Authorization"])
+            return RateLimitedResponse()
+
+    monkeypatch.setattr("llm.client.httpx.Client", RateLimitedClient)
+    monkeypatch.setattr("llm.client.time.sleep", lambda seconds: None)
+    client = LLMClient([ProviderConfig(
+        name="test",
+        base_url="https://provider.example/v1",
+        model_name="test-model",
+        api_key_env=["KEYS"],
+        max_retries=2,
+    )])
+
+    with pytest.raises(LLMRequestError) as captured:
+        client.complete(
+            [{"role": "user", "content": "hello"}],
+            provider_name="test",
+        )
+
+    assert captured.value.attempts == 3
+    assert captured.value.retries == 2
+    assert len(seen_keys) == 3
+    assert seen_keys == ["Bearer key-one", "Bearer key-two", "Bearer key-one"]
