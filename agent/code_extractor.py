@@ -75,8 +75,10 @@ def _parse_json_calls(text: str) -> list[str]:
             payload = json.loads(raw)
         except json.JSONDecodeError:
             continue
+        if not isinstance(payload, dict):
+            continue
         name = payload.get("name")
-        if name:
+        if isinstance(name, str) and name:
             calls.append(_tool_call(name, payload.get("arguments", {})))
     return calls
 
@@ -98,6 +100,8 @@ def _parse_react_calls(text: str) -> list[str]:
 
 def extract_code(response: str) -> ExtractionResult:
     """Extract Python or translate XML, JSON/Hermes, and ReAct tool calls."""
+    if not isinstance(response, str):
+        return ExtractionResult(error="The LLM response was not text.")
     blocks = re.findall(
         r"```(?:python|py)?\s*\n?(.*?)```",
         response,
