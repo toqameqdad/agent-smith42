@@ -134,7 +134,7 @@ class MCPClient:
             self._dispatch(method, params),
             self._loop,
         )
-        return future.result(timeout=120)
+        return future.result()
 
     def build_manual(self) -> str:
         """Build an LLM-facing manual from the connected server's live schemas."""
