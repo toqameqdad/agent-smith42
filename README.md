@@ -89,7 +89,10 @@ uv run python benchmark_runner.py --config benchmark_config.json
 The runner enforces at least two providers, five models, and three shared tasks. It runs the
 standard prompt for every model/task pair, then runs the configured compact-prompt ablation
 for the selected model on the same tasks. It saves each trace as
-`benchmark_results/.../solution.json` and regenerates `BENCHMARK_REPORT.md`. The example
+`benchmark_results/.../solution.json`, writes `task.json`, `solution.json`,
+`stdout.log`, and `stderr.log` under
+`evaluations/SWEBENCH/YYYY-MM-DD_HH-MM-SS/task_id/`, and regenerates
+`BENCHMARK_REPORT.md`. The example
 model IDs are placeholders, not claims about current free-tier availability.
 
 ### Run the MBPP agent
