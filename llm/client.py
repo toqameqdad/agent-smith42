@@ -38,6 +38,7 @@ class LLMClient:
         messages: list[dict[str, str]],
         provider_name: str,
         max_tokens: int | None = None,
+        stop: list[str] | None = None,
     ) -> LLMResponse:
         provider = self.providers[provider_name]
         token_count = self.tokens.token_count(provider_name)
@@ -63,6 +64,8 @@ class LLMClient:
                     }
                     if max_tokens is not None:
                         payload["max_tokens"] = max_tokens
+                    if stop:
+                        payload["stop"] = stop
                     response = client.post(
                         endpoint,
                         json=payload,
