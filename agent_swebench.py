@@ -4,6 +4,7 @@ import argparse
 import json
 import os
 import re
+import signal
 import subprocess
 import sys
 import tempfile
@@ -30,13 +31,13 @@ def load_task(path: str) -> SWEBenchTaskInput:
 
 def build_task_prompt(task: SWEBenchTaskInput) -> str:
     return (
-        "Benchmark: SWE-bench\\n"
-        f"Instance: {task.instance_id}\\n"
-        f"Repository: {task.repo or '(not specified)'}\\n\\n"
-        "Issue description:\\n"
-        f"{task.problem_statement}\\n\\n"
-        "Hints:\\n"
-        f"{task.hints_text or '(none)'}\\n\\n"
+        "Benchmark: SWE-bench\n"
+        f"Instance: {task.instance_id}\n"
+        f"Repository: {task.repo or '(not specified)'}\n\n"
+        "Issue description:\n"
+        f"{task.problem_statement}\n\n"
+        "Hints:\n"
+        f"{task.hints_text or '(none)'}\n\n"
         "The repository is available through the mandatory MCP tools. First inspect "
         "the relevant files and tests. Reproduce the issue, identify the root cause, "
         "make a minimal targeted change, and run the evaluation script. Do not fetch "
@@ -83,6 +84,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--api-key-env", default="OPENROUTER_API_KEY")
     parser.add_argument("--max-iterations", type=int, default=30)
     args = parser.parse_args(argv)
+    signal.signal(signal.SIGTERM, lambda signum, frame: sys.exit(128 + signum))
 
     container_name = "agent-smith-" + re.sub(
         r"[^a-zA-Z0-9_.-]", "-", Path(args.task_file).stem
