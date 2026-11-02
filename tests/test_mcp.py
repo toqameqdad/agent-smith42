@@ -63,3 +63,60 @@ def test_mbpp_tool_rejects_empty_inputs():
     result = json.loads(run_tests("", ["assert True"]))
     assert result["success"] is False
     assert "empty" in result["output"]
+
+
+def test_swebench_mcp_server_supports_streamable_http(tmp_path, monkeypatch):
+    import socket
+    import subprocess
+    import sys
+    import time
+
+    (tmp_path / "example.py").write_text("answer = 42\n", encoding="utf-8")
+    monkeypatch.setenv("TESTBED_PATH", str(tmp_path))
+
+    with socket.socket() as listener:
+        listener.bind(("127.0.0.1", 0))
+        port = listener.getsockname()[1]
+
+    process = subprocess.Popen(
+        [
+            sys.executable,
+            "mcp_tools_swebench.py",
+            "--transport",
+            "streamable-http",
+            "--port",
+            str(port),
+        ],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    try:
+        last_error = None
+        for _ in range(40):
+            if process.poll() is not None:
+                raise RuntimeError(process.stderr.read())
+            try:
+                with MCPClient(server_url=f"http://127.0.0.1:{port}/mcp") as client:
+                    names = {tool["name"] for tool in client.tools}
+                    assert "read_file" in names
+                    result = client.handle_call(
+                        "call_tool",
+                        {
+                            "name": "read_file",
+                            "arguments": {"filepath": "example.py"},
+                        },
+                    )
+                    assert "answer = 42" in str(result)
+                    return
+            except Exception as error:
+                last_error = error
+                time.sleep(0.25)
+        raise AssertionError(f"Streamable HTTP MCP server did not become ready: {last_error}")
+    finally:
+        process.terminate()
+        try:
+            process.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            process.wait(timeout=5)
