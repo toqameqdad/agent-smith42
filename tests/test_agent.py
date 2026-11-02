@@ -122,3 +122,76 @@ def test_orchestrator_runs_thought_code_observation_until_final_answer():
 def test_tool_call_with_builtin_name_uses_generic_dispatch():
     result = extract_code('<tool_call>{"name":"print","arguments":{"value":"hello"}}</tool_call>')
     assert result.code == "call_mcp_tool('print', **{'value': 'hello'})"
+
+
+def test_provider_config_loads_multiple_keys_from_environment(monkeypatch):
+    from llm.providers import ProviderConfig
+
+    monkeypatch.setenv("KEYS_ONE", "first, second")
+    monkeypatch.setenv("KEYS_TWO", "third")
+    provider = ProviderConfig(
+        name="test",
+        base_url="https://provider.example/v1",
+        model_name="model",
+        api_key_env=["KEYS_ONE", "KEYS_TWO"],
+    )
+    assert provider.load_tokens() == ["first", "second", "third"]
+
+
+def test_llm_client_rotates_api_key_after_rate_limit(monkeypatch):
+    import httpx
+    from llm.client import LLMClient
+    from llm.providers import ProviderConfig
+
+    monkeypatch.setenv("KEYS", "key-one,key-two")
+    seen_keys = []
+
+    class FakeResponse:
+        def __init__(self, status_code, payload):
+            self.status_code = status_code
+            self.payload = payload
+
+        def raise_for_status(self):
+            if self.status_code >= 400:
+                request = httpx.Request("POST", "https://provider.example/v1/chat/completions")
+                response = httpx.Response(self.status_code, request=request)
+                raise httpx.HTTPStatusError("rate limited", request=request, response=response)
+
+        def json(self):
+            return self.payload
+
+    class FakeClient:
+        def __init__(self, timeout):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return None
+
+        def post(self, url, json, headers):
+            seen_keys.append(headers["Authorization"])
+            if len(seen_keys) == 1:
+                return FakeResponse(429, {})
+            return FakeResponse(200, {
+                "choices": [{"message": {"content": "Action: print\nAction Input: {\"value\": 1}"}}],
+                "usage": {"prompt_tokens": 12, "completion_tokens": 4},
+            })
+
+    monkeypatch.setattr("llm.client.httpx.Client", FakeClient)
+    client = LLMClient([ProviderConfig(
+        name="test",
+        base_url="https://provider.example/v1",
+        model_name="model",
+        api_key_env=["KEYS"],
+        max_retries=1,
+    )])
+
+    response = client.complete(
+        [{"role": "user", "content": "hello"}],
+        provider_name="test",
+    )
+    assert seen_keys == ["Bearer key-one", "Bearer key-two"]
+    assert response.retries == 1
+    assert response.input_tokens == 12
