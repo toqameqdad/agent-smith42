@@ -343,3 +343,21 @@ def test_llm_client_reports_all_failed_attempts(monkeypatch):
     assert captured.value.retries == 2
     assert len(seen_keys) == 3
     assert seen_keys == ["Bearer key-one", "Bearer key-two", "Bearer key-one"]
+
+
+def test_extracts_react_tool_call_with_nested_json_arguments():
+    response = (
+        "Thought: inspect the nested configuration\n"
+        "Action: search_code\n"
+        'Action Input: {"pattern":"target","options":{"levels":[1,2],'
+        '"text":"brace } inside a string"}}\n'
+        "Observation: this line is not part of the JSON input"
+    )
+
+    result = extract_code(response)
+
+    assert result.response_format == "react"
+    assert result.code == (
+        "search_code(pattern='target', "
+        "options={'levels': [1, 2], 'text': 'brace } inside a string'})"
+    )
