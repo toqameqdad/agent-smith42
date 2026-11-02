@@ -78,6 +78,19 @@ class AgentOrchestrator:
                 error = "Cumulative output-token limit reached."
                 break
 
+            # A conservative character-based estimate prevents sending a prompt
+            # that is already larger than the remaining cumulative input budget.
+            estimated_input = sum(
+                len(message.get("content", "")) for message in messages
+            ) // 3
+            remaining_input = self.max_input_tokens - total_input
+            if estimated_input > remaining_input:
+                error = (
+                    "Estimated cumulative input-token limit would be exceeded; "
+                    "the next LLM request was not sent."
+                )
+                break
+
             try:
                 response = self.llm_client.complete(
                     messages,
@@ -119,6 +132,8 @@ class AgentOrchestrator:
                         final_answer = result.get("answer", "")
                         solution = str(final_answer)
                         success = bool(solution.strip())
+                        if not success:
+                            error = "final_answer() returned an empty solution."
                     elif result.get("status") == "error":
                         sandbox_output = (
                             f"Sandbox error: {result.get('message', 'Unknown error')}"
