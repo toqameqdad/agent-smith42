@@ -197,8 +197,8 @@ def test_docker_backed_command_and_patch_tools_use_container(tmp_path, monkeypat
     calls = []
     monkeypatch.setattr(
         "tools.execution.docker_exec",
-        lambda container, arguments, timeout=120, workdir="/testbed": (
-            calls.append((container, arguments, workdir))
+        lambda container, arguments, timeout=120, workdir="/testbed", environment=None: (
+            calls.append((container, arguments, workdir, environment))
             or CompletedProcess(arguments, 0, "container output", "")
         ),
     )
@@ -211,6 +211,7 @@ def test_docker_backed_command_and_patch_tools_use_container(tmp_path, monkeypat
     assert command_result["stdout"] == "container output"
     assert calls[0][0] == "swe-container"
     assert calls[0][2] == "/testbed/src"
+    assert calls[0][3] == {"TESTBED_PATH": "/testbed"}
 
     patch = get_patch()
     assert patch == "container output"
@@ -230,8 +231,8 @@ def test_docker_backed_run_tests_uses_task_evaluation_script(tmp_path, monkeypat
     calls = []
     monkeypatch.setattr(
         "tools.execution.docker_exec",
-        lambda container, arguments, timeout=120, workdir="/testbed": (
-            calls.append((container, arguments, timeout, workdir))
+        lambda container, arguments, timeout=120, workdir="/testbed", environment=None: (
+            calls.append((container, arguments, timeout, workdir, environment))
             or CompletedProcess(arguments, 0, "3 passed", "")
         ),
     )
@@ -244,3 +245,4 @@ def test_docker_backed_run_tests_uses_task_evaluation_script(tmp_path, monkeypat
     assert result["stdout"] == "3 passed"
     assert calls[0][1] == ["/bin/bash", "-lc", "pytest -q"]
     assert calls[0][3] == "/testbed"
+    assert calls[0][4] == {"TESTBED_PATH": "/testbed"}
