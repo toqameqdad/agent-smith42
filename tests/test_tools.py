@@ -56,6 +56,8 @@ def test_code_search_and_ast_definition_lookup(tmp_path, monkeypatch):
     assert "sample.py:1" in search_code("def target", "*.py")
     assert "sample.py:1" in search_function_or_class_definition_in_code("target")
     assert "sample.py:4" in find_references("target")
+    assert "sample.py:1" not in find_references("target", "sample.py", 1)
+    assert "sample.py:4" in find_references("target", "sample.py", 1)
 
 
 def test_run_command_is_limited_to_repository(tmp_path, monkeypatch):
