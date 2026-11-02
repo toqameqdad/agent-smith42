@@ -38,6 +38,7 @@ class AgentOrchestrator:
         max_input_tokens: int = 6000,
         max_output_tokens: int = 1500,
         timeout_seconds: int = 120,
+        prompt_variant: str = "standard",
     ):
         self.llm_client = llm_client
         self.sandbox = sandbox
@@ -49,6 +50,7 @@ class AgentOrchestrator:
         self.max_input_tokens = max_input_tokens
         self.max_output_tokens = max_output_tokens
         self.timeout_seconds = timeout_seconds
+        self.prompt_variant = prompt_variant
 
     def run(
         self,
@@ -57,7 +59,10 @@ class AgentOrchestrator:
         task_prompt: str,
     ) -> SolutionOutput:
         started = time.monotonic()
-        system_prompt = build_system_prompt(self.sandbox_manual)
+        system_prompt = build_system_prompt(
+            self.sandbox_manual,
+            variant=self.prompt_variant,
+        )
         messages = [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": task_prompt},
