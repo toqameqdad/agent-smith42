@@ -126,7 +126,7 @@ def extract_code(response: str) -> ExtractionResult:
     # Some providers omit the closing fence. If the remainder is valid Python,
     # execute it and explicitly tell the model how it was interpreted.
     unclosed = re.search(
-        r"```(?:python|py)?\\s*\\n(.*)$",
+        r"```(?:python|py)?\s*\n(.*)$",
         response,
         flags=re.IGNORECASE | re.DOTALL,
     )
