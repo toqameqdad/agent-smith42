@@ -18,12 +18,32 @@ def repository_root() -> Path:
 def resolve_task_path(path: str, root: Path | None = None) -> Path:
     root = root or repository_root()
     candidate = Path(path)
-    if not candidate.is_absolute():
+    if candidate.is_absolute():
+        try:
+            candidate.relative_to(root)
+        except ValueError:
+            try:
+                relative = candidate.relative_to(Path("/testbed"))
+            except ValueError as error:
+                raise PermissionError(
+                    f"Path is outside the task repository: {path}"
+                ) from error
+            candidate = root / relative
+    else:
         candidate = root / candidate
     resolved = candidate.resolve()
     if resolved != root and root not in resolved.parents:
         raise PermissionError(f"Path is outside the task repository: {path}")
     return resolved
+
+
+def display_task_path(path: Path, root: Path | None = None) -> str:
+    """Display paths using the task container's /testbed convention."""
+    root = root or repository_root()
+    relative = path.resolve().relative_to(root.resolve())
+    if os.getenv("DOCKER_CONTAINER"):
+        return str(Path("/testbed") / relative)
+    return str(path.resolve())
 
 
 def read_file(
@@ -115,7 +135,7 @@ def list_files(directory: str = ".", pattern: str = "*") -> str:
     if not target.is_dir():
         raise NotADirectoryError(directory)
     matches = sorted(
-        str(path)
+        display_task_path(path, root)
         for path in target.rglob("*")
         if path.is_file()
         and fnmatch.fnmatch(path.name, pattern)
