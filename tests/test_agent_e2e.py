@@ -42,3 +42,24 @@ def test_agent_loop_completes_through_real_sandbox():
     assert result.steps[0].sandbox_input == (
         "final_answer('def add(a, b): return a + b')"
     )
+
+
+def test_mbpp_mcp_tool_executes_assertions_in_real_sandbox():
+    import sys
+
+    from sandbox.mcp_client import MCPClient
+
+    with MCPClient(stdio_command=f"{sys.executable} mcp_tools_mbpp.py") as client:
+        result = client.handle_call(
+            "call_tool",
+            {
+                "name": "run_tests",
+                "arguments": {
+                    "code": "def add(a, b): return a + b",
+                    "test_list": ["assert add(20, 22) == 42"],
+                },
+            },
+        )
+
+    assert result["isError"] is False
+    assert '"success": true' in str(result).lower()
