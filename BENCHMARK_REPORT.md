@@ -37,14 +37,19 @@ solution.json traces.
 | --- | --- | --- | ---: | ---: | ---: |
 | Pending | Pending | Pending | — | — | — |
 
-## 5. Analysis
+## 5. Ablation study
 
-To be completed after all runs. Compare solve rate, exploration efficiency, token usage,
-iteration discipline, response latency, retry behavior, and provider availability. Explain
-where model behavior differed and whether the same agent prompt and tool setup worked
-consistently across providers.
+Not yet executed. Use benchmark_runner.py to compare the standard prompt against the
+compact prompt for the same provider, model, and task set. Record the before/after solve
+rate, token use, and wall-clock time.
 
-## 6. Reproducibility
+## 6. Conclusions
+
+To be completed after the real benchmark runs. Select the final model(s) based on measured
+solve rate, exploration efficiency, token usage, iteration discipline, latency, provider
+reliability, and the ablation results. Identify models that can be disregarded and explain why.
+
+## 7. Reproducibility
 
 Record the repository commit, provider endpoint, model identifiers, task IDs, timestamps,
 environment limits, and the corresponding evaluation output paths for every run.
