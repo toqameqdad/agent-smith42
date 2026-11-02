@@ -244,3 +244,13 @@ def test_extracts_json_tool_call_without_closing_stop_sequence():
     result = extract_code(response)
     assert result.response_format == "json_tool_call"
     assert result.code == "read_file(filepath='/testbed/a.py')"
+
+
+def test_system_prompt_variants_support_ablation():
+    from agent.prompts import build_system_prompt
+
+    standard = build_system_prompt("tool manual", "standard")
+    compact = build_system_prompt("tool manual", "compact")
+    assert standard != compact
+    assert "tool manual" in standard
+    assert "tool manual" in compact
