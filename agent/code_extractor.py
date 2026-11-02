@@ -15,6 +15,7 @@ class ExtractionResult:
     code: str = ""
     response_format: str = "none"
     error: str | None = None
+    warning: str | None = None
 
 
 def _python_value(value: Any) -> str:
@@ -120,6 +121,31 @@ def extract_code(response: str) -> ExtractionResult:
                 error=f"Extracted Python contains a syntax error: {error}",
             )
         return ExtractionResult(code=code, response_format="python")
+
+
+    # Some providers omit the closing fence. If the remainder is valid Python,
+    # execute it and explicitly tell the model how it was interpreted.
+    unclosed = re.search(
+        r"```(?:python|py)?\\s*\\n(.*)$",
+        response,
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+    if unclosed:
+        code = unclosed.group(1).strip()
+        if code:
+            try:
+                ast.parse(code)
+            except SyntaxError as error:
+                return ExtractionResult(
+                    code=code,
+                    response_format="python_unclosed",
+                    error=f"Unclosed Python block also contains a syntax error: {error}",
+                )
+            return ExtractionResult(
+                code=code,
+                response_format="python_unclosed",
+                warning="The closing code fence was missing; the remaining response was parsed as Python.",
+            )
 
     xml_calls = _parse_xml_calls(response)
     if xml_calls:
