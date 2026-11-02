@@ -21,7 +21,12 @@ def _python_value(value: Any) -> str:
 
 
 def _tool_call(name: str, arguments: Any) -> str:
-    if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", name):
+    valid_name = bool(re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", name))
+    valid_arguments = isinstance(arguments, dict) and all(
+        isinstance(key, str) and re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", key)
+        for key in arguments
+    )
+    if not valid_name or not valid_arguments:
         return f"call_mcp_tool({name!r}, **{_python_value(arguments or {})})"
     if isinstance(arguments, dict):
         args = ", ".join(
