@@ -850,6 +850,7 @@ def test_prepare_python_runtime(tmp_path):
     assert (root / "bin" / "python3.10").is_file()
     assert (root / "lib" / "python3.10" / "encodings").is_dir()
     assert (root / "lib" / "python3.10" / "lib-dynload").is_dir()
+    assert (root / "usr" / "local" / "lib" / "python3.10" / "encodings").is_dir()
     assert not (
         root / "lib" / "python3.10" / "site-packages"
     ).exists()
