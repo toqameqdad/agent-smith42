@@ -44,4 +44,4 @@ jobs:
             -v "$GITHUB_WORKSPACE:/workspace" \
             -w /workspace \
             python:3.10-slim \
-            sh -lc 'apt-get update && apt-get install -y --no-install-recommends util-linux libseccomp2 && pip install uv && uv sync --dev && uv run pytest -q tests/test_sandbox.py::test_worker_communication tests/test_mcp_sandbox_e2e.py::test_interactive_session_calls_mcp_server_end_to_end'
+            sh -lc 'apt-get update && apt-get install -y --no-install-recommends util-linux libseccomp2 && pip install uv && uv sync --dev && uv run pytest -q tests/test_sandbox.py::test_worker_communication tests/test_mcp_sandbox_e2e.py::test_interactive_session_calls_mcp_server_end_to_end tests/test_agent_e2e.py'
