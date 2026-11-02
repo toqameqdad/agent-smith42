@@ -1,7 +1,9 @@
 """Convert common LLM tool-call formats into sandbox-executable Python."""
 
 import ast
+import builtins
 import json
+import keyword
 import re
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
@@ -21,13 +23,19 @@ def _python_value(value: Any) -> str:
 
 
 def _tool_call(name: str, arguments: Any) -> str:
-    valid_name = bool(re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", name))
+    valid_name = (
+        bool(re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", name))
+        and not keyword.iskeyword(name)
+        and not hasattr(builtins, name)
+        and name not in {"final_answer", "call_mcp_tool", "sandbox_manual"}
+    )
     valid_arguments = isinstance(arguments, dict) and all(
         isinstance(key, str) and re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", key)
         for key in arguments
     )
     if not valid_name or not valid_arguments:
-        return f"call_mcp_tool({name!r}, **{_python_value(arguments or {})})"
+        normalized = arguments if isinstance(arguments, dict) else {"input": arguments}
+        return f"call_mcp_tool({name!r}, **{_python_value(normalized or {})})"
     if isinstance(arguments, dict):
         args = ", ".join(
             f"{key}={_python_value(value)}" for key, value in arguments.items()
