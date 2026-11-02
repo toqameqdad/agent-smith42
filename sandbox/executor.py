@@ -5,6 +5,7 @@ import json
 import os
 import signal
 import select
+import time
 from sandbox.config import SandboxConfig
 from sandbox.security import check_imports
 
@@ -209,13 +210,17 @@ class SandboxSession:
             self.process.stdin.write(json.dumps(request) + "\n")
             self.process.stdin.flush()
 
+            remaining_execution_time = self.config.max_execution_time_seconds
+            wait_started = time.monotonic()
             while True:
                 ready, _, _ = select.select(
                     [self.process.stdout],
                     [],
                     [],
-                    self.config.max_execution_time_seconds,
+                    remaining_execution_time,
                 )
+                elapsed = time.monotonic() - wait_started
+                remaining_execution_time = max(0.0, remaining_execution_time - elapsed)
                 if not ready:
                     self._terminate()
                     return {
@@ -258,6 +263,9 @@ class SandboxSession:
 
                 self.process.stdin.write(json.dumps(mcp_response) + "\n")
                 self.process.stdin.flush()
+                # Time spent waiting for an MCP action is outside the sandbox
+                # execution budget; start the clock again when code resumes.
+                wait_started = time.monotonic()
 
         except (BrokenPipeError, OSError, json.JSONDecodeError) as error:
             self._terminate()
