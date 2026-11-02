@@ -11,9 +11,14 @@ def docker_exec(
     arguments: list[str],
     timeout: float = 120,
     workdir: str = "/testbed",
+    environment: dict[str, str] | None = None,
 ) -> subprocess.CompletedProcess:
+    command = ["docker", "exec", "-w", workdir]
+    for name, value in (environment or {}).items():
+        command.extend(["-e", f"{name}={value}"])
+    command.extend([container, *arguments])
     return subprocess.run(
-        ["docker", "exec", "-w", workdir, container, *arguments],
+        command,
         capture_output=True,
         text=True,
         timeout=timeout,
