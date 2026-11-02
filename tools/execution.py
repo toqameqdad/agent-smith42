@@ -37,6 +37,7 @@ def run_command(command: str, workdir: str = ".") -> dict:
                 ["/bin/bash", "-lc", command],
                 timeout=timeout,
                 workdir=remote_cwd,
+                environment={"TESTBED_PATH": "/testbed"},
             )
             sync_workspace_from_container(container, root)
             return _result(result.stdout, result.stderr, result.returncode)
@@ -86,6 +87,7 @@ def run_tests() -> dict:
                 container,
                 ["/bin/bash", "-lc", script],
                 timeout=timeout,
+                environment={"TESTBED_PATH": "/testbed"},
             )
             sync_workspace_from_container(container, repository_root())
         else:
