@@ -71,7 +71,11 @@ def _parse_xml_calls(text: str) -> list[str]:
 
 def _parse_json_calls(text: str) -> list[str]:
     calls: list[str] = []
-    for raw in re.findall(r"<tool_call>\s*(.*?)\s*</tool_call>", text, flags=re.DOTALL):
+    for raw in re.findall(
+        r"<tool_call>\s*(.*?)(?:</tool_call>|$)",
+        text,
+        flags=re.DOTALL,
+    ):
         try:
             payload = json.loads(raw)
         except json.JSONDecodeError:
