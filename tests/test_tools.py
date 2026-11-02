@@ -160,3 +160,16 @@ def test_listing_and_search_ignore_symlinks_outside_repository(tmp_path, monkeyp
 
     assert "escape.py" not in list_files(".", "*.py")
     assert "SECRET_MARKER" not in search_code("SECRET_MARKER", "*.py")
+
+
+def test_run_tests_executes_configured_evaluation_script(tmp_path, monkeypatch):
+    root = tmp_path / "repo"
+    root.mkdir()
+    monkeypatch.setenv("TESTBED_PATH", str(root))
+    monkeypatch.setenv("EVAL_SCRIPT", "printf evaluation-ok")
+
+    from tools.execution import run_tests
+
+    result = run_tests()
+    assert result["stdout"] == "evaluation-ok"
+    assert result["exit_code"] == 0
