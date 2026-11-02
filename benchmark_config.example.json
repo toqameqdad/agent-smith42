@@ -1,0 +1,45 @@
+{
+  "providers": [
+    {
+      "name": "openrouter",
+      "provider_url": "https://openrouter.ai/api/v1",
+      "api_key_env": ["OPENROUTER_API_KEY", "OPENROUTER_API_KEY_2"],
+      "models": [
+        "replace-with-free-model-1",
+        "replace-with-free-model-2",
+        "replace-with-free-model-3"
+      ]
+    },
+    {
+      "name": "groq",
+      "provider_url": "https://api.groq.com/openai/v1",
+      "api_key_env": ["GROQ_API_KEY"],
+      "models": [
+        "replace-with-free-model-4",
+        "replace-with-free-model-5"
+      ]
+    }
+  ],
+  "tasks": [
+    {
+      "task_file": "../cache/swebench_task_1.json",
+      "task_id": "task-1",
+      "rationale": "Select a smaller repository task to measure basic navigation and targeted fixes."
+    },
+    {
+      "task_file": "../cache/swebench_task_2.json",
+      "task_id": "task-2",
+      "rationale": "Select a task with multiple related modules to measure cross-file exploration."
+    },
+    {
+      "task_file": "../cache/swebench_task_3.json",
+      "task_id": "task-3",
+      "rationale": "Select a task with a reproducible failing test to measure debugging and test iteration."
+    }
+  ],
+  "ablation": {
+    "provider_name": "openrouter",
+    "model_name": "replace-with-free-model-1",
+    "prompt_variant": "compact"
+  }
+}
