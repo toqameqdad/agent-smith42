@@ -76,8 +76,6 @@ The connected server's tools, resources, prompts, and tool input schemas are dis
 
 MCP tools with valid, non-conflicting Python identifiers are injected as callable functions. Use `call_mcp_tool("exact-tool-name", key=value)` for names that cannot be exposed directly.
 
-#
-
 ### Run the model benchmark matrix
 
 Copy `benchmark_config.example.json`, replace all placeholder model IDs and task paths with
@@ -219,7 +217,7 @@ The repository contains separate MBPP and SWE-bench MCP server scripts. The SWE-
 
 ## Benchmark results and analysis
 
-No benchmark runs have been completed yet. MBPP and SWE-bench results will be added after the agent loop, benchmark adapters, and evaluation pipeline are implemented and tested. No success rate or performance claim is made at this stage.
+No benchmark runs have been completed yet. Run the benchmark matrix with valid moulinette task dumps and free-tier API keys to populate the measured results, intermediary metrics, provider reliability, and ablation analysis. No solve-rate or performance claim is fabricated.
 
 ## Resources
 
