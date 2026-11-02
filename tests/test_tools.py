@@ -122,3 +122,15 @@ def test_docker_workspace_sync_removes_stale_local_files(tmp_path, monkeypatch):
 
     assert not (destination / "stale.txt").exists()
     assert (destination / "fresh.txt").read_text() == "fresh"
+
+
+def test_edit_file_reports_python_syntax_errors(tmp_path, monkeypatch):
+    root = tmp_path / "repo"
+    root.mkdir()
+    source = root / "broken.py"
+    source.write_text("def target():\n    return 1\n", encoding="utf-8")
+    monkeypatch.setenv("TESTBED_PATH", str(root))
+
+    feedback = edit_file("broken.py", "return 1", "if True print(1)")
+    assert "syntax error" in feedback.lower()
+    assert "line 2" in feedback
