@@ -4,6 +4,7 @@ import argparse
 import json
 from datetime import datetime, timezone
 import re
+import shutil
 import signal
 import subprocess
 import sys
@@ -82,12 +83,18 @@ def _run_agent(
     model_name: str,
     task: dict[str, Any],
     output_path: Path,
+    evaluation_dir: Path,
     prompt_variant: str,
     max_iterations: int,
 ) -> dict[str, Any]:
     output_path.parent.mkdir(parents=True, exist_ok=True)
+    evaluation_dir.mkdir(parents=True, exist_ok=True)
     if output_path.exists():
         output_path.unlink()
+
+    shutil.copy2(task["resolved_task_file"], evaluation_dir / "task.json")
+    stdout_path = evaluation_dir / "stdout.log"
+    stderr_path = evaluation_dir / "stderr.log"
 
     api_key_env = provider.get("api_key_env", [])
     if isinstance(api_key_env, str):
@@ -106,24 +113,27 @@ def _run_agent(
     ]
 
     started = time.monotonic()
-    process = subprocess.Popen(
-        command,
-        cwd=ROOT,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.PIPE,
-        text=True,
-    )
-    stderr = ""
-    try:
-        _, stderr = process.communicate(timeout=1200)
-    except subprocess.TimeoutExpired:
-        process.send_signal(signal.SIGTERM)
+    with stdout_path.open("w", encoding="utf-8") as stdout_file, stderr_path.open(
+        "w", encoding="utf-8"
+    ) as stderr_file:
+        process = subprocess.Popen(
+            command,
+            cwd=ROOT,
+            stdout=stdout_file,
+            stderr=stderr_file,
+            text=True,
+        )
         try:
-            _, stderr = process.communicate(timeout=15)
+            process.wait(timeout=1200)
         except subprocess.TimeoutExpired:
-            process.kill()
-            _, stderr = process.communicate()
+            process.send_signal(signal.SIGTERM)
+            try:
+                process.wait(timeout=15)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.wait()
     elapsed = time.monotonic() - started
+    stderr = stderr_path.read_text(encoding="utf-8", errors="replace")
 
     if output_path.is_file():
         try:
@@ -149,22 +159,32 @@ def _run_agent(
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "error": (
                 f"Agent process exited with code {process.returncode}. "
-                f"{(stderr or '').strip()[-3000:]}"
+                f"{stderr.strip()[-3000:]}"
             ),
         }
         output_path.write_text(json.dumps(result, indent=2), encoding="utf-8")
 
+    shutil.copy2(output_path, evaluation_dir / "solution.json")
     return {
         "provider": provider["name"],
         "model": model_name,
         "task_id": task["resolved_task_id"],
         "variant": prompt_variant,
         "output_path": str(output_path),
+        "evaluation_dir": str(evaluation_dir),
         "result": result,
         "wall_seconds": elapsed,
         "return_code": process.returncode,
-        "stderr": stderr or "",
+        "stderr": stderr,
     }
+
+
+def _next_evaluation_timestamp(previous: str | None) -> str:
+    while True:
+        current = datetime.now(timezone.utc).strftime("%Y-%m-%d_%H-%M-%S")
+        if current != previous:
+            return current
+        time.sleep(0.1)
 
 
 def _patch_files(patch: str) -> list[str]:
@@ -255,8 +275,8 @@ def _render_report(records: list[dict[str, Any]], config: dict[str, Any]) -> str
         "",
         "## 2. Results",
         "",
-        "| Provider | Model | Task | Pass/Fail | Iterations | Input tokens | Output tokens | Wall time (s) |",
-        "| --- | --- | --- | --- | ---: | ---: | ---: | ---: |",
+        "| Provider | Model | Task | Pass/Fail | Iterations | Input tokens | Output tokens | Wall time (s) | Evaluation logs |",
+        "| --- | --- | --- | --- | ---: | ---: | ---: | ---: | --- |",
     ])
     for record in baseline:
         result = record["result"]
@@ -266,7 +286,8 @@ def _render_report(records: list[dict[str, Any]], config: dict[str, Any]) -> str
             f"{result.get('iterations', 0)} | "
             f"{result.get('total_input_tokens', 0)} | "
             f"{result.get('total_output_tokens', 0)} | "
-            f"{record['wall_seconds']:.2f} |"
+            f"{record['wall_seconds']:.2f} | "
+            f"{Path(record['evaluation_dir']).relative_to(ROOT)} |"
         )
 
     grouped: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
@@ -394,9 +415,10 @@ def _render_report(records: list[dict[str, Any]], config: dict[str, Any]) -> str
         "",
         "## 7. Reproducibility",
         "",
-        "Each run's backing solution.json is saved under the benchmark results directory. "
-        "The task files, provider configuration, commit, model identifiers, and timestamps "
-        "should be retained with the report.",
+        "Each run's task.json, solution.json, stdout.log, and stderr.log are saved under "
+        "evaluations/SWEBENCH/YYYY-MM-DD_HH-MM-SS/task_id/. The corresponding backing "
+        "solution.json is also saved under the benchmark results directory. Retain task "
+        "files, provider configuration, commit, model identifiers, and timestamps.",
         "",
     ])
     return "\n".join(lines)
@@ -416,10 +438,14 @@ def main(argv: list[str] | None = None) -> int:
         config_path = Path(args.config).resolve()
         config = _load_config(config_path)
         output_root = Path(args.output_dir).resolve()
+        evaluation_root = ROOT / "evaluations" / "SWEBENCH"
         records: list[dict[str, Any]] = []
+        previous_timestamp = None
 
         for provider in config["providers"]:
             for model_name in provider["models"]:
+                run_timestamp = _next_evaluation_timestamp(previous_timestamp)
+                previous_timestamp = run_timestamp
                 for task in config["tasks"]:
                     output_path = (
                         output_root
@@ -433,16 +459,24 @@ def main(argv: list[str] | None = None) -> int:
                         f"[standard] {provider['name']} / {model_name} / "
                         f"{task['resolved_task_id']}"
                     )
+                    evaluation_dir = (
+                        evaluation_root
+                        / run_timestamp
+                        / _safe_name(task["resolved_task_id"])
+                    )
                     records.append(_run_agent(
                         provider,
                         model_name,
                         task,
                         output_path,
+                        evaluation_dir,
                         "standard",
                         min(args.max_iterations, 30),
                     ))
 
         ablation = config["ablation"]
+        run_timestamp = _next_evaluation_timestamp(previous_timestamp)
+        previous_timestamp = run_timestamp
         provider = next(
             item for item in config["providers"]
             if item["name"] == ablation["provider_name"]
@@ -461,11 +495,17 @@ def main(argv: list[str] | None = None) -> int:
                 f"{provider['name']} / {ablation['model_name']} / "
                 f"{task['resolved_task_id']}"
             )
+            evaluation_dir = (
+                evaluation_root
+                / run_timestamp
+                / _safe_name(task["resolved_task_id"])
+            )
             records.append(_run_agent(
                 provider,
                 ablation["model_name"],
                 task,
                 output_path,
+                evaluation_dir,
                 ablation["prompt_variant"],
                 min(args.max_iterations, 30),
             ))
