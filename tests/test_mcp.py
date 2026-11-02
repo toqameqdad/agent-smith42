@@ -30,3 +30,36 @@ def test_swebench_mcp_server_exposes_mandatory_tools(tmp_path, monkeypatch):
         )
         serialized = str(result)
         assert "answer = 42" in serialized
+
+
+def test_mbpp_tool_runs_candidate_in_sandbox(monkeypatch):
+    import json
+    import mcp_tools_mbpp
+
+    calls = []
+    monkeypatch.setattr(
+        mcp_tools_mbpp,
+        "send_to_worker",
+        lambda code, config: calls.append((code, config)) or {
+            "status": "success",
+            "output": "MBPP_TESTS_PASSED\n",
+        },
+    )
+
+    result = json.loads(
+        mcp_tools_mbpp.run_tests(
+            "def add(a, b): return a + b",
+            ["assert add(1, 2) == 3"],
+        )
+    )
+    assert result["success"] is True
+    assert "assert add(1, 2) == 3" in calls[0][0]
+
+
+def test_mbpp_tool_rejects_empty_inputs():
+    import json
+    from mcp_tools_mbpp import run_tests
+
+    result = json.loads(run_tests("", ["assert True"]))
+    assert result["success"] is False
+    assert "empty" in result["output"]
