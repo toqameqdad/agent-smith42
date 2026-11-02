@@ -138,6 +138,8 @@ def list_files(directory: str = ".", pattern: str = "*") -> str:
         display_task_path(path, root)
         for path in target.rglob("*")
         if path.is_file()
+        and not path.is_symlink()
+        and path.resolve().is_relative_to(root)
         and fnmatch.fnmatch(path.name, pattern)
         and not any(part in {".git", "__pycache__", ".venv"} for part in path.parts)
     )
