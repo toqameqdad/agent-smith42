@@ -138,11 +138,12 @@ class AgentOrchestrator:
                         if not success:
                             error = "final_answer() returned an empty solution."
                     elif result.get("status") == "error":
-                        sandbox_output = (
-                            f"Sandbox error: {message or 'Unknown error'}"
-                        )
+                        error_output = f"Sandbox error: {message or 'Unknown error'}"
                         if raw_output:
-                            sandbox_output += f"\nPartial output:\n{raw_output}"
+                            error_output += f"\nPartial output:\n{raw_output}"
+                        sandbox_output = "\n".join(
+                            part for part in (extraction.warning, error_output) if part
+                        )
                 except (KeyboardInterrupt, SystemExit):
                     raise
                 except Exception as exception:
