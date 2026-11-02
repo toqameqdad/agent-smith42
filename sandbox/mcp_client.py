@@ -1,5 +1,6 @@
 import asyncio
 import json
+import os
 import shlex
 import threading
 from typing import Any
@@ -64,6 +65,7 @@ class MCPClient:
             server = StdioServerParameters(
                 command=parts[0],
                 args=parts[1:],
+                env=os.environ.copy(),
             )
 
         self._client = Client(server)
