@@ -33,7 +33,12 @@ def _load_config(path: Path) -> dict[str, Any]:
     config = json.loads(path.read_text(encoding="utf-8"))
     providers = config.get("providers", [])
     tasks = config.get("tasks", [])
-    model_count = sum(len(provider.get("models", [])) for provider in providers)
+    model_pairs = [
+        (provider.get("name"), model)
+        for provider in providers
+        for model in provider.get("models", [])
+    ]
+    model_count = len(set(model_pairs))
 
     if len(providers) < 2:
         raise ValueError("Benchmark config must define at least two providers.")
@@ -46,7 +51,11 @@ def _load_config(path: Path) -> dict[str, Any]:
     if any(not name for name in names) or len(set(names)) != len(names):
         raise ValueError("Provider names must be non-empty and unique.")
 
+    if any(not provider.get("provider_url") or not provider.get("models") for provider in providers):
+        raise ValueError("Each provider needs a provider_url and at least one model.")
+
     config_dir = path.resolve().parent
+    task_ids = []
     for task in tasks:
         task_path = Path(task["task_file"])
         if not task_path.is_absolute():
@@ -59,6 +68,9 @@ def _load_config(path: Path) -> dict[str, Any]:
             raise ValueError(
                 f"Add a selection rationale for task {task['resolved_task_id']}."
             )
+        task_ids.append(task["resolved_task_id"])
+    if len(set(task_ids)) != len(task_ids):
+        raise ValueError("SWE-bench task IDs must be unique.")
 
     ablation = config.get("ablation")
     if not isinstance(ablation, dict):
@@ -66,8 +78,8 @@ def _load_config(path: Path) -> dict[str, Any]:
             "Add an ablation object selecting provider_name, model_name, "
             "and prompt_variant (for example compact)."
         )
-    if ablation.get("prompt_variant") not in {"standard", "compact"}:
-        raise ValueError("Ablation prompt_variant must be standard or compact.")
+    if ablation.get("prompt_variant") != "compact":
+        raise ValueError("Ablation prompt_variant must be compact to differ from baseline.")
     selected_provider = next(
         (item for item in providers if item["name"] == ablation.get("provider_name")),
         None,
