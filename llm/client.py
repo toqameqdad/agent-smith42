@@ -23,6 +23,26 @@ class LLMResponse:
     raw: dict[str, Any] = field(default_factory=dict)
 
 
+class LLMRequestError(RuntimeError):
+    """A failed completion request with accounting for every HTTP attempt."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        attempts: int,
+        request_time_ms: float,
+        api_url: str,
+        model_name: str,
+    ):
+        super().__init__(message)
+        self.attempts = attempts
+        self.retries = max(0, attempts - 1)
+        self.request_time_ms = request_time_ms
+        self.api_url = api_url
+        self.model_name = model_name
+
+
 class LLMClient:
     """Calls configured OpenAI-compatible providers; no API key is stored in code."""
 
@@ -53,9 +73,10 @@ class LLMClient:
 
         started = time.monotonic()
         last_error: Exception | None = None
-        retries = 0
+        attempts = 0
         for attempt in range(provider.max_retries + 1):
             token = self.tokens.get_token(provider_name)
+            attempts += 1
             try:
                 with httpx.Client(timeout=provider.timeout_seconds) as client:
                     payload: dict[str, Any] = {
@@ -83,7 +104,7 @@ class LLMClient:
                     input_tokens=int(usage.get("prompt_tokens", 0)),
                     output_tokens=int(usage.get("completion_tokens", 0)),
                     request_time_ms=(time.monotonic() - started) * 1000,
-                    retries=retries,
+                    retries=attempt,
                     api_url=provider.base_url,
                     model_name=provider.model_name,
                     provider=provider_name,
@@ -91,12 +112,16 @@ class LLMClient:
                 )
             except (httpx.HTTPError, ValueError) as error:
                 last_error = error
-                retries += 1
                 if attempt < provider.max_retries:
                     self.tokens.rotate(provider_name)
                     time.sleep(min(2 ** attempt, 8))
-        raise RuntimeError(
-            f"LLM provider '{provider_name}' failed after {retries} attempts: {last_error}"
+        elapsed_ms = (time.monotonic() - started) * 1000
+        raise LLMRequestError(
+            f"LLM provider '{provider_name}' failed after {attempts} attempts: {last_error}",
+            attempts=attempts,
+            request_time_ms=elapsed_ms,
+            api_url=provider.base_url,
+            model_name=provider.model_name,
         ) from last_error
 
     def close(self) -> None:
