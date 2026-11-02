@@ -69,3 +69,12 @@ def test_session_relays_mcp_calls_to_handler(monkeypatch):
         assert relayed == {"status": "mcp_result", "result": {"total": 42}}
     finally:
         session.close()
+
+
+def test_oversized_mcp_result_has_explicit_truncation_notice():
+    from sandbox.executor import _truncate_mcp_result
+
+    result = _truncate_mcp_result({"content": "x" * 100}, limit=20)
+    assert result["_sandbox_truncated"] is True
+    assert "truncated" in result["notice"]
+    assert len(result["preview"]) == 20
