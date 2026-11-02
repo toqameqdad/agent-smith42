@@ -52,6 +52,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--api-key-env", default="OPENROUTER_API_KEY")
     parser.add_argument("--max-iterations", type=int, default=10)
     args = parser.parse_args(argv)
+    if args.max_iterations < 1:
+        parser.error("--max-iterations must be at least 1")
+    max_iterations = min(args.max_iterations, 10)
     llm = None
 
     try:
@@ -87,7 +90,7 @@ def main(argv: list[str] | None = None) -> int:
                     model_name=args.model_name,
                     api_url=args.provider_url,
                     sandbox_manual=mcp_client.build_manual(),
-                    max_iterations=args.max_iterations,
+                    max_iterations=max_iterations,
                     max_input_tokens=6000,
                     max_output_tokens=1500,
                     timeout_seconds=120,
