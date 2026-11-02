@@ -2,9 +2,13 @@
 
 import os
 import subprocess
-from pathlib import Path
 
+from tools.docker_workspace import docker_exec, sync_workspace_from_container
 from tools.filesystem import repository_root, resolve_task_path
+
+
+def _result(stdout: str, stderr: str, exit_code: int) -> dict:
+    return {"stdout": stdout, "stderr": stderr, "exit_code": exit_code}
 
 
 def run_command(command: str, workdir: str = ".") -> dict:
@@ -13,6 +17,22 @@ def run_command(command: str, workdir: str = ".") -> dict:
     if not cwd.is_dir():
         raise NotADirectoryError(workdir)
     timeout = float(os.getenv("COMMAND_TIMEOUT_SECONDS", "120"))
+    container = os.getenv("DOCKER_CONTAINER")
+    if container:
+        relative = cwd.relative_to(root)
+        remote_cwd = "/testbed" if str(relative) == "." else f"/testbed/{relative}"
+        try:
+            result = docker_exec(
+                container,
+                ["/bin/bash", "-lc", command],
+                timeout=timeout,
+                workdir=remote_cwd,
+            )
+            sync_workspace_from_container(container, root)
+            return _result(result.stdout, result.stderr, result.returncode)
+        except subprocess.TimeoutExpired as error:
+            return _result(error.stdout or "", (error.stderr or "") + "\nCommand timed out.", 124)
+
     try:
         result = subprocess.run(
             command,
@@ -24,17 +44,9 @@ def run_command(command: str, workdir: str = ".") -> dict:
             timeout=timeout,
             check=False,
         )
-        return {
-            "stdout": result.stdout,
-            "stderr": result.stderr,
-            "exit_code": result.returncode,
-        }
+        return _result(result.stdout, result.stderr, result.returncode)
     except subprocess.TimeoutExpired as error:
-        return {
-            "stdout": error.stdout or "",
-            "stderr": (error.stderr or "") + "\nCommand timed out.",
-            "exit_code": 124,
-        }
+        return _result(error.stdout or "", (error.stderr or "") + "\nCommand timed out.", 124)
 
 
 def run_tests() -> dict:
@@ -46,37 +58,53 @@ def run_tests() -> dict:
             raise FileNotFoundError(script_path)
         script = path.read_text(encoding="utf-8")
     if not script:
-        return {
-            "stdout": "",
-            "stderr": "No evaluation script configured (EVAL_SCRIPT or EVAL_SCRIPT_PATH).",
-            "exit_code": 2,
-        }
-    result = subprocess.run(
-        script,
-        cwd=repository_root(),
-        shell=True,
-        executable="/bin/bash",
-        capture_output=True,
-        text=True,
-        timeout=float(os.getenv("TEST_TIMEOUT_SECONDS", "600")),
-        check=False,
-    )
-    return {
-        "stdout": result.stdout,
-        "stderr": result.stderr,
-        "exit_code": result.returncode,
-    }
+        return _result(
+            "",
+            "No evaluation script configured (EVAL_SCRIPT or EVAL_SCRIPT_PATH).",
+            2,
+        )
+
+    timeout = float(os.getenv("TEST_TIMEOUT_SECONDS", "600"))
+    container = os.getenv("DOCKER_CONTAINER")
+    try:
+        if container:
+            result = docker_exec(
+                container,
+                ["/bin/bash", "-lc", script],
+                timeout=timeout,
+            )
+            sync_workspace_from_container(container, repository_root())
+        else:
+            result = subprocess.run(
+                script,
+                cwd=repository_root(),
+                shell=True,
+                executable="/bin/bash",
+                capture_output=True,
+                text=True,
+                timeout=timeout,
+                check=False,
+            )
+        return _result(result.stdout, result.stderr, result.returncode)
+    except subprocess.TimeoutExpired as error:
+        return _result(error.stdout or "", (error.stderr or "") + "\nTests timed out.", 124)
 
 
 def get_patch() -> str:
-    root = repository_root()
-    result = subprocess.run(
-        ["git", "-c", "core.fileMode=false", "diff"],
-        cwd=root,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
+    container = os.getenv("DOCKER_CONTAINER")
+    if container:
+        result = docker_exec(
+            container,
+            ["git", "-c", "core.fileMode=false", "diff"],
+        )
+    else:
+        result = subprocess.run(
+            ["git", "-c", "core.fileMode=false", "diff"],
+            cwd=repository_root(),
+            capture_output=True,
+            text=True,
+            check=False,
+        )
     if result.returncode:
         raise RuntimeError(result.stderr.strip() or "git diff failed.")
     return result.stdout
