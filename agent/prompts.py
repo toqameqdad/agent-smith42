@@ -12,6 +12,15 @@ For every iteration, respond with a short Thought followed by one executable Pyt
 code block. The code block must contain only Python statements that call available
 functions, inspect their returned values, and print useful observations.
 
+Use this response structure on every iteration:
+Thought: state the next concrete investigation or change.
+```python
+result = some_available_tool(...)
+print(result)
+```
+The next iteration receives the actual sandbox output as its Observation. Never write
+an Observation yourself or fabricate a tool result.
+
 Use final_answer(answer_string) exactly once when the task is complete:
 - MBPP: pass the complete Python solution code.
 - SWE-bench: pass the unified git patch returned by get_patch().
