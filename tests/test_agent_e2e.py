@@ -27,7 +27,7 @@ def _require_namespaces():
 
 
 class OneShotLLM:
-    def complete(self, messages, provider_name, max_tokens=None):
+    def complete(self, messages, provider_name, max_tokens=None, stop=None):
         return SimpleNamespace(
             content="Thought: submit the completed solution\n"
             + chr(96) * 3
