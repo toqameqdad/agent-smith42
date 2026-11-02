@@ -106,7 +106,7 @@ class AgentOrchestrator:
             total_output += response.output_tokens
             extraction = extract_code(response.content)
             sandbox_input = extraction.code
-            sandbox_output = ""
+            sandbox_output = extraction.warning or ""
             final_answer = None
 
             if extraction.error:
@@ -128,10 +128,8 @@ class AgentOrchestrator:
                     execution_output = raw_output or message or str(
                         result.get("status", "")
                     )
-                    sandbox_output = (
-                        f"{sandbox_output}\\n{execution_output}"
-                        if sandbox_output
-                        else execution_output
+                    sandbox_output = "\\n".join(
+                        part for part in (extraction.warning, execution_output) if part
                     )
                     if result.get("status") == "final_answer":
                         final_answer = result.get("answer", "")
