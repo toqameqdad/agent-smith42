@@ -100,3 +100,25 @@ def test_get_patch_returns_git_diff(tmp_path, monkeypatch):
     patch = get_patch()
     assert "--- a/file.txt" in patch
     assert "+after" in patch
+
+
+def test_docker_workspace_sync_removes_stale_local_files(tmp_path, monkeypatch):
+    from pathlib import Path
+    from subprocess import CompletedProcess
+
+    from tools.docker_workspace import sync_workspace_from_container
+
+    destination = tmp_path / "workspace"
+    destination.mkdir()
+    (destination / "stale.txt").write_text("stale")
+
+    def fake_run(command, **kwargs):
+        staging = Path(command[-1])
+        (staging / "fresh.txt").write_text("fresh")
+        return CompletedProcess(command, 0, "", "")
+
+    monkeypatch.setattr("tools.docker_workspace.subprocess.run", fake_run)
+    sync_workspace_from_container("test-container", destination)
+
+    assert not (destination / "stale.txt").exists()
+    assert (destination / "fresh.txt").read_text() == "fresh"
