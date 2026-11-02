@@ -90,6 +90,20 @@ def prepare_python_runtime(root: str | Path) -> Path:
         ),
     )
 
+    # The copied interpreter retains its build-time /usr/local prefix.
+    # Mirror the standard library there so isolated mode can locate encodings.
+    prefix_stdlib = root / "usr" / "local" / "lib" / "python3.10"
+    shutil.copytree(
+        stdlib,
+        prefix_stdlib,
+        symlinks=True,
+        dirs_exist_ok=True,
+        ignore=shutil.ignore_patterns(
+            "site-packages",
+            "__pycache__",
+        ),
+    )
+
     install_prefix = root / "install"
 
     if install_prefix.is_symlink():
