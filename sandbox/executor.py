@@ -8,6 +8,22 @@ import select
 from sandbox.config import SandboxConfig
 from sandbox.security import check_imports
 
+
+def _truncate_mcp_result(result: object, limit: int = 20000) -> object:
+    """Bound MCP payload size while preserving an explicit truncation notice."""
+    serialized = json.dumps(result, ensure_ascii=False, default=str)
+    if len(serialized) <= limit:
+        return result
+    return {
+        "_sandbox_truncated": True,
+        "notice": (
+            f"MCP output exceeded {limit} characters and was truncated. "
+            "The preview is incomplete; request a narrower result."
+        ),
+        "preview": serialized[:limit],
+    }
+
+
 def set_memory_limit(memory_mb: int) -> None:
     """
     Set a memory limit for the current process.
@@ -228,7 +244,7 @@ class SandboxSession:
                     )
                     mcp_response = {
                         "status": "mcp_result",
-                        "result": result,
+                        "result": _truncate_mcp_result(result),
                     }
                 except Exception as error:
                     mcp_response = {
