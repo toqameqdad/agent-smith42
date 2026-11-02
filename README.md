@@ -77,6 +77,23 @@ The connected server's tools, resources, prompts, and tool input schemas are dis
 MCP tools with valid, non-conflicting Python identifiers are injected as callable functions. Use `call_mcp_tool("exact-tool-name", key=value)` for names that cannot be exposed directly.
 
 #
+
+### Run the model benchmark matrix
+
+Copy `benchmark_config.example.json`, replace all placeholder model IDs and task paths with
+currently available free-tier models and the same three SWE-bench task files, then export the
+listed API-key environment variables. Each task should include a short selection rationale.
+
+```bash
+uv run python benchmark_runner.py --config benchmark_config.json
+```
+
+The runner enforces at least two providers, five models, and three shared tasks. It runs the
+standard prompt for every model/task pair, then runs the configured compact-prompt ablation
+for the selected model on the same tasks. It saves each trace as
+`benchmark_results/.../solution.json` and regenerates `BENCHMARK_REPORT.md`. The example
+model IDs are placeholders, not claims about current free-tier availability.
+
 ### Run the MBPP agent
 
 The evaluation environment must provide the selected provider's API key through an environment variable. Multiple comma-separated keys can be supplied in one variable, or several variable names can be listed with `--api-key-env`.
