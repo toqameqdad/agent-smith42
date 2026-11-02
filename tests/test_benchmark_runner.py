@@ -5,6 +5,7 @@ from benchmark_runner import (
     _first_relevant_file_step,
     _load_config,
     _render_report,
+    ROOT,
 )
 
 
@@ -109,6 +110,7 @@ def test_benchmark_report_contains_results_reliability_and_ablation():
         "model": "model-a",
         "task_id": "repo__issue-1",
         "variant": "standard",
+        "evaluation_dir": str(ROOT / "evaluations" / "SWEBENCH" / "2026-01-01_00-00-00" / "repo__issue-1"),
         "result": result,
         "wall_seconds": 12.0,
     }
