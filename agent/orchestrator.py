@@ -123,10 +123,10 @@ class AgentOrchestrator:
             else:
                 try:
                     result = self.sandbox.execute(sandbox_input)
-                    sandbox_output = str(
-                        result.get("output")
-                        or result.get("message")
-                        or result.get("status", "")
+                    raw_output = str(result.get("output") or "")
+                    message = str(result.get("message") or "")
+                    sandbox_output = raw_output or message or str(
+                        result.get("status", "")
                     )
                     if result.get("status") == "final_answer":
                         final_answer = result.get("answer", "")
@@ -136,8 +136,10 @@ class AgentOrchestrator:
                             error = "final_answer() returned an empty solution."
                     elif result.get("status") == "error":
                         sandbox_output = (
-                            f"Sandbox error: {result.get('message', 'Unknown error')}"
+                            f"Sandbox error: {message or 'Unknown error'}"
                         )
+                        if raw_output:
+                            sandbox_output += f"\nPartial output:\n{raw_output}"
                 except (KeyboardInterrupt, SystemExit):
                     raise
                 except Exception as exception:
