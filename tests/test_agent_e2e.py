@@ -1,8 +1,29 @@
+import subprocess
 from types import SimpleNamespace
+
+import pytest
 
 from agent.orchestrator import AgentOrchestrator
 from sandbox.config import SandboxConfig
 from sandbox.executor import SandboxSession
+
+
+def _require_namespaces():
+    probe = subprocess.run(
+        [
+            "unshare",
+            "--user",
+            "--map-root-user",
+            "--mount",
+            "--net",
+            "true",
+        ],
+        capture_output=True,
+        text=True,
+        timeout=5,
+    )
+    if probe.returncode:
+        pytest.skip("Linux namespaces are unavailable: " + probe.stderr.strip())
 
 
 class OneShotLLM:
@@ -22,6 +43,7 @@ class OneShotLLM:
 
 
 def test_agent_loop_completes_through_real_sandbox():
+    _require_namespaces()
     config = SandboxConfig(max_execution_time_seconds=10)
     with SandboxSession(config) as sandbox:
         agent = AgentOrchestrator(
@@ -45,6 +67,7 @@ def test_agent_loop_completes_through_real_sandbox():
 
 
 def test_mbpp_mcp_tool_executes_assertions_in_real_sandbox():
+    _require_namespaces()
     import sys
 
     from sandbox.mcp_client import MCPClient
