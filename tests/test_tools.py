@@ -134,3 +134,15 @@ def test_edit_file_reports_python_syntax_errors(tmp_path, monkeypatch):
     feedback = edit_file("broken.py", "return 1", "if True print(1)")
     assert "syntax error" in feedback.lower()
     assert "line 2" in feedback
+
+
+def test_absolute_testbed_paths_map_to_host_workspace(tmp_path, monkeypatch):
+    root = tmp_path / "workspace"
+    root.mkdir()
+    (root / "main.py").write_text("answer = 42\n", encoding="utf-8")
+    monkeypatch.setenv("TESTBED_PATH", str(root))
+    monkeypatch.setenv("DOCKER_CONTAINER", "task-container")
+
+    assert read_file("/testbed/main.py") == "1: answer = 42"
+    assert "/testbed/main.py" in list_files("/testbed", "*.py")
+    assert "/testbed/main.py:1" in search_code("answer", "*.py")
