@@ -4,7 +4,11 @@ import ast
 import re
 from pathlib import Path
 
-from tools.filesystem import repository_root, resolve_task_path
+from tools.filesystem import (
+    display_task_path,
+    repository_root,
+    resolve_task_path,
+)
 
 
 IGNORED = {".git", "__pycache__", ".venv", "node_modules"}
@@ -30,7 +34,7 @@ def search_code(pattern: str, file_pattern: str = "*") -> str:
             continue
         for number, content in enumerate(lines, 1):
             if expression.search(content):
-                results.append(f"{path.resolve()}:{number} {content}")
+                results.append(f"{display_task_path(path, root)}:{number} {content}")
     return "\n".join(results) if results else "No matches found."
 
 
@@ -47,7 +51,7 @@ def search_function_or_class_definition_in_code(name: str) -> str:
             if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
                 if node.name == name:
                     line = source.splitlines()[node.lineno - 1]
-                    results.append(f"{path.resolve()}:{node.lineno} {line}")
+                    results.append(f"{display_task_path(path, root)}:{node.lineno} {line}")
     return "\n".join(results) if results else "Definition not found."
 
 
@@ -64,5 +68,5 @@ def find_references(name: str, filepath: str = "", line: int = 0) -> str:
             continue
         for number, content in enumerate(lines, 1):
             if pattern.search(content):
-                results.append(f"{path.resolve()}:{number} {content}")
+                results.append(f"{display_task_path(path, root)}:{number} {content}")
     return "\n".join(results) if results else "No references found."
