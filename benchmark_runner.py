@@ -2,6 +2,7 @@
 
 import argparse
 import json
+from datetime import datetime, timezone
 import re
 import signal
 import subprocess
@@ -53,6 +54,10 @@ def _load_config(path: Path) -> dict[str, Any]:
             raise FileNotFoundError(task_path)
         task["resolved_task_file"] = str(task_path.resolve())
         task["resolved_task_id"] = str(task.get("task_id") or _task_id(task_path))
+        if not task.get("rationale"):
+            raise ValueError(
+                f"Add a selection rationale for task {task['resolved_task_id']}."
+            )
 
     ablation = config.get("ablation")
     if not isinstance(ablation, dict):
@@ -110,7 +115,7 @@ def _run_agent(
     )
     stderr = ""
     try:
-        _, stderr = process.communicate(timeout=950)
+        _, stderr = process.communicate(timeout=1200)
     except subprocess.TimeoutExpired:
         process.send_signal(signal.SIGTERM)
         try:
@@ -216,6 +221,7 @@ def _render_report(records: list[dict[str, Any]], config: dict[str, Any]) -> str
         "## 1. Setup",
         "",
         f"- Repository commit: {commit_id}",
+        f"- Run timestamp (UTC): {datetime.now(timezone.utc).isoformat()}",
         f"- Providers: {len(providers)}",
         f"- Models: {sum(len(item['models']) for item in providers)}",
         f"- SWE-bench tasks: {len(tasks)}",
@@ -235,12 +241,13 @@ def _render_report(records: list[dict[str, Any]], config: dict[str, Any]) -> str
         "",
         "### Task selection",
         "",
-        "| Task ID | Task file |",
-        "| --- | --- |",
+        "| Task ID | Task file | Selection rationale |",
+        "| --- | --- | --- |",
     ])
     for task in tasks:
         lines.append(
-            f"| {task['resolved_task_id']} | {task['resolved_task_file']} |"
+            f"| {task['resolved_task_id']} | {task['resolved_task_file']} | "
+            f"{task['rationale']} |"
         )
 
     lines.extend([
@@ -363,9 +370,20 @@ def _render_report(records: list[dict[str, Any]], config: dict[str, Any]) -> str
             f"{provider_model[1]} ({pass_count}/{len(best_records)} tasks)."
         )
         lines.append(
-            "- Select the final model only after reviewing the traces, reliability, "
-            "token use, and ablation results; pass rate alone is not sufficient."
+            "- Highest pass rate is a measured candidate, not an automatic final selection; "
+            "review traces, reliability, token use, and ablation before deciding."
         )
+        zero_pass = [
+            f"{provider}/{model}"
+            for (provider, model), model_records in grouped.items()
+            if not any(r["result"].get("success") for r in model_records)
+        ]
+        if zero_pass:
+            lines.append(
+                "- Models with zero passes on this task set (disregard candidates): "
+                + ", ".join(sorted(zero_pass))
+                + "."
+            )
     else:
         lines.append("No completed runs were available.")
     lines.extend([
@@ -392,6 +410,8 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     try:
+        if args.max_iterations < 1:
+            parser.error("--max-iterations must be at least 1")
         config_path = Path(args.config).resolve()
         config = _load_config(config_path)
         output_root = Path(args.output_dir).resolve()
