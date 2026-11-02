@@ -125,8 +125,13 @@ class AgentOrchestrator:
                     result = self.sandbox.execute(sandbox_input)
                     raw_output = str(result.get("output") or "")
                     message = str(result.get("message") or "")
-                    sandbox_output = raw_output or message or str(
+                    execution_output = raw_output or message or str(
                         result.get("status", "")
+                    )
+                    sandbox_output = (
+                        f"{sandbox_output}\\n{execution_output}"
+                        if sandbox_output
+                        else execution_output
                     )
                     if result.get("status") == "final_answer":
                         final_answer = result.get("answer", "")
