@@ -148,6 +148,7 @@ def test_llm_client_rotates_api_key_after_rate_limit(monkeypatch):
 
     monkeypatch.setenv("KEYS", "key-one,key-two")
     seen_keys = []
+    seen_stop = []
 
     class FakeResponse:
         def __init__(self, status_code, payload):
@@ -175,6 +176,7 @@ def test_llm_client_rotates_api_key_after_rate_limit(monkeypatch):
 
         def post(self, url, json, headers):
             seen_keys.append(headers["Authorization"])
+            seen_stop.append(json.get("stop"))
             if len(seen_keys) == 1:
                 return FakeResponse(429, {})
             return FakeResponse(200, {
@@ -194,8 +196,10 @@ def test_llm_client_rotates_api_key_after_rate_limit(monkeypatch):
     response = client.complete(
         [{"role": "user", "content": "hello"}],
         provider_name="test",
+        stop=["<end_code>", "</tool_call>"],
     )
     assert seen_keys == ["Bearer key-one", "Bearer key-two"]
+    assert seen_stop == [["<end_code>", "</tool_call>"]] * 2
     assert response.retries == 1
     assert response.input_tokens == 12
 
