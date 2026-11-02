@@ -72,6 +72,8 @@ def find_references(name: str, filepath: str = "", line: int = 0) -> str:
         except OSError:
             continue
         for number, content in enumerate(lines, 1):
+            if definition_path == path.resolve() and number == line:
+                continue
             if pattern.search(content):
                 results.append(f"{display_task_path(path, root)}:{number} {content}")
     return "\n".join(results) if results else "No references found."
