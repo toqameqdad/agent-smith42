@@ -65,13 +65,16 @@ def _docker_run(image: str, container_name: str) -> None:
 
 
 def _docker_cleanup(container_name: str) -> None:
-    subprocess.run(
-        ["docker", "rm", "-f", container_name],
-        capture_output=True,
-        text=True,
-        timeout=30,
-        check=False,
-    )
+    try:
+        subprocess.run(
+            ["docker", "rm", "-f", container_name],
+            capture_output=True,
+            text=True,
+            timeout=30,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        pass
 
 
 def main(argv: list[str] | None = None) -> int:
