@@ -126,3 +126,65 @@ def test_benchmark_report_contains_results_reliability_and_ablation():
     assert "## 3. Provider reliability" in report
     assert "## 5. Ablation study" in report
     assert "standard vs compact" in report
+
+
+def test_benchmark_run_writes_required_evaluation_log_files(tmp_path, monkeypatch):
+    from benchmark_runner import _run_agent
+
+    task_file = tmp_path / "task.json"
+    task_file.write_text('{"instance_id":"repo__issue-9"}', encoding="utf-8")
+    task = {
+        "resolved_task_file": str(task_file),
+        "resolved_task_id": "repo__issue-9",
+    }
+    output_path = tmp_path / "results" / "solution.json"
+    evaluation_dir = tmp_path / "evaluations" / "SWEBENCH" / "2026-11-02_12-00-00" / "repo__issue-9"
+
+    class FakeProcess:
+        returncode = 0
+
+        def __init__(self, command, cwd, stdout, stderr, text):
+            self.command = command
+            self.stdout_file = stdout
+            self.stderr_file = stderr
+
+        def wait(self, timeout=None):
+            self.stdout_file.write("agent stdout\n")
+            self.stderr_file.write("agent stderr\n")
+            output_index = self.command.index("--output") + 1
+            output = Path(self.command[output_index])
+            output.write_text(json.dumps({
+                "task_id": "repo__issue-9",
+                "benchmark": "swebench",
+                "success": True,
+                "solution": "diff",
+                "iterations": 1,
+                "total_requests": 1,
+                "total_input_tokens": 10,
+                "total_output_tokens": 5,
+                "total_time_seconds": 1.0,
+                "steps": [],
+                "system_prompt": "prompt",
+                "timestamp": "2026-11-02T12:00:00",
+            }), encoding="utf-8")
+
+    monkeypatch.setattr("benchmark_runner.subprocess.Popen", FakeProcess)
+    record = _run_agent(
+        {
+            "name": "provider",
+            "provider_url": "https://provider.example/v1",
+            "api_key_env": ["KEY"],
+        },
+        "model",
+        task,
+        output_path,
+        evaluation_dir,
+        "standard",
+        30,
+    )
+
+    assert record["result"]["success"] is True
+    assert (evaluation_dir / "task.json").is_file()
+    assert (evaluation_dir / "solution.json").is_file()
+    assert (evaluation_dir / "stdout.log").read_text() == "agent stdout\n"
+    assert (evaluation_dir / "stderr.log").read_text() == "agent stderr\n"
