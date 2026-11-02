@@ -102,7 +102,7 @@ def _balanced_json_value(text: str) -> str:
         if in_string:
             if escaped:
                 escaped = False
-            elif character == "\\\\":
+            elif character == "\\":
                 escaped = True
             elif character == '"':
                 in_string = False
@@ -123,8 +123,8 @@ def _balanced_json_value(text: str) -> str:
 
 def _parse_react_calls(text: str) -> list[str]:
     pattern = re.compile(
-        r"Action:\\s*([A-Za-z_][A-Za-z0-9_.-]*)\\s*"
-        r"\\nAction Input:\\s*",
+        r"Action:\s*([A-Za-z_][A-Za-z0-9_.-]*)\s*"
+        r"\nAction Input:\s*",
         flags=re.MULTILINE,
     )
     calls: list[str] = []
@@ -136,7 +136,6 @@ def _parse_react_calls(text: str) -> list[str]:
             arguments = {"input": raw.strip()}
         calls.append(_tool_call(match.group(1), arguments))
     return calls
-
 
 def extract_code(response: str) -> ExtractionResult:
     """Extract Python or translate XML, JSON/Hermes, and ReAct tool calls."""
