@@ -220,7 +220,11 @@ class SandboxSession:
                     self._terminate()
                     return {
                         "status": "error",
-                        "message": "Execution timed out.",
+                        "message": (
+                            "Execution timed out; no complete output was available. "
+                            "Any returned output may be partial."
+                        ),
+                        "output": "",
                     }
 
                 response_line = self.process.stdout.readline()
