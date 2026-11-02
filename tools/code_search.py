@@ -62,8 +62,7 @@ def search_function_or_class_definition_in_code(name: str) -> str:
 
 def find_references(name: str, filepath: str = "", line: int = 0) -> str:
     root = repository_root()
-    if filepath:
-        resolve_task_path(filepath, root)
+    definition_path = resolve_task_path(filepath, root) if filepath else None
     pattern = re.compile(rf"\b{re.escape(name)}\b")
     results = []
     for path in _source_files(root):
