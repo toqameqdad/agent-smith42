@@ -10,7 +10,7 @@ from sandbox.config import SandboxConfig
 from sandbox.security import check_imports
 
 
-def _truncate_mcp_result(result: object, limit: int = 20000) -> object:
+def _truncate_mcp_result(result: object, limit: int = 100000) -> object:
     """Bound MCP payload size while preserving an explicit truncation notice."""
     serialized = json.dumps(result, ensure_ascii=False, default=str)
     if len(serialized) <= limit:
@@ -253,7 +253,15 @@ class SandboxSession:
                     )
                     mcp_response = {
                         "status": "mcp_result",
-                        "result": _truncate_mcp_result(result),
+                        "result": _truncate_mcp_result(
+                            result,
+                            limit=(
+                                2000000
+                                if response["method"] == "call_tool"
+                                and response.get("params", {}).get("name") == "get_patch"
+                                else 100000
+                            ),
+                        ),
                     }
                 except Exception as error:
                     mcp_response = {
