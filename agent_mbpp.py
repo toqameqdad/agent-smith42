@@ -52,6 +52,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--api-key-env", default="OPENROUTER_API_KEY")
     parser.add_argument("--max-iterations", type=int, default=10)
     args = parser.parse_args(argv)
+    llm = None
 
     try:
         task = load_task(args.task_file)
@@ -96,7 +97,6 @@ def main(argv: list[str] | None = None) -> int:
                     benchmark="mbpp",
                     task_prompt=build_task_prompt(task),
                 )
-        llm.close()
 
         output_path = Path(args.output)
         output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -109,6 +109,9 @@ def main(argv: list[str] | None = None) -> int:
     except Exception as error:
         print(f"MBPP agent failed: {error}", file=sys.stderr)
         return 1
+    finally:
+        if llm is not None:
+            llm.close()
 
 
 if __name__ == "__main__":
