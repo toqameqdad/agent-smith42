@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 
 from benchmark_runner import (
     _first_passing_test_step,
