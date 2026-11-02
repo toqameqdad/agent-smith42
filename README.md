@@ -25,6 +25,18 @@ The current implementation focuses on the sandbox execution layer and its MCP in
 
 The sandbox deliberately fails closed when required kernel isolation features are unavailable.
 
+### Tests
+
+Run the unit and integration suite:
+
+```bash
+uv run pytest -q
+```
+
+GitHub Actions also runs the isolated worker and live MCP-over-stdio REPL integration
+inside a privileged Linux container, where user, mount, and network namespaces are
+available.
+
 ### Installation
 
 ```bash
