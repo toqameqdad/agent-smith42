@@ -15,6 +15,7 @@ class CompletionClient(Protocol):
         messages: list[dict[str, str]],
         provider_name: str,
         max_tokens: int | None = None,
+        stop: list[str] | None = None,
     ) -> Any: ...
 
 
@@ -96,6 +97,7 @@ class AgentOrchestrator:
                     messages,
                     provider_name=self.provider_name,
                     max_tokens=remaining_output,
+                    stop=["<end_code>", "</tool_call>"],
                 )
             except Exception as exception:
                 error = f"LLM request failed: {exception}"
