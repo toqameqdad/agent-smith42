@@ -121,33 +121,38 @@ def prepare_python_runtime(root: str | Path) -> Path:
     
 def get_shared_libraries(executable: str) -> list[str]:
     """
-    Discover shared library paths required by an executable.
+    Discover shared libraries required by Python and its standard extensions.
     """
-    result = subprocess.run(
-        ["ldd", executable],
-        capture_output=True,
-        text=True,
-        check=True,
-        timeout=10,
+    targets = [Path(executable)]
+    extension_directory = (
+        Path(sysconfig.get_path("stdlib")) / "lib-dynload"
     )
+    if extension_directory.is_dir():
+        targets.extend(extension_directory.glob("*.so"))
 
     libraries = []
+    for target in targets:
+        result = subprocess.run(
+            ["ldd", str(target)],
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=10,
+        )
 
-    for line in result.stdout.splitlines():
-        parts = line.strip().split()
+        for line in result.stdout.splitlines():
+            parts = line.strip().split()
 
-        if "=>" in parts:
-            index = parts.index("=>")
-            path = parts[index + 1]
+            if "=>" in parts:
+                index = parts.index("=>")
+                path = parts[index + 1]
 
-            if path.startswith("/"):
-                libraries.append(path)
+                if path.startswith("/"):
+                    libraries.append(path)
 
-        elif parts and parts[0].startswith("/"):
-            libraries.append(parts[0])
+            elif parts and parts[0].startswith("/"):
+                libraries.append(parts[0])
 
-    # Python builds configured with --enable-shared may need libpython
-    # at runtime even when ldd does not report it as a resolved dependency.
     library_name = sysconfig.get_config_var("LDLIBRARY")
     library_directory = sysconfig.get_config_var("LIBDIR")
     if library_name and library_directory:
@@ -155,7 +160,7 @@ def get_shared_libraries(executable: str) -> list[str]:
         if python_library.is_file():
             libraries.append(str(python_library))
 
-    return libraries
+    return list(dict.fromkeys(libraries))
 
 
 def prepare_library_mount_points(
