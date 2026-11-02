@@ -65,8 +65,10 @@ def test_token_manager_rotates_keys():
 class FakeLLM:
     def __init__(self, responses):
         self.responses = iter(responses)
+        self.stop_sequences = []
 
-    def complete(self, messages, provider_name, max_tokens=None):
+    def complete(self, messages, provider_name, max_tokens=None, stop=None):
+        self.stop_sequences.append(stop)
         return next(self.responses)
 
 
@@ -115,6 +117,7 @@ def test_orchestrator_runs_thought_code_observation_until_final_answer():
     assert result.solution == "def add(a, b): return a + b"
     assert result.iterations == 2
     assert result.total_requests == 2
+    assert llm.stop_sequences == [["<end_code>", "</tool_call>"]] * 2
     assert result.steps[0].sandbox_output == "exploration complete"
     assert "Observation from the real sandbox" in result.steps[1].llm_output or len(sandbox.calls) == 2
 
@@ -230,3 +233,10 @@ def test_orchestrator_preserves_extraction_warning_and_partial_timeout_output():
     assert "closing code fence was missing" in result.steps[0].sandbox_output
     assert "Execution timed out" in result.steps[0].sandbox_output
     assert "partial result" in result.steps[0].sandbox_output
+
+
+def test_extracts_json_tool_call_without_closing_stop_sequence():
+    response = '<tool_call>{"name":"read_file","arguments":{"filepath":"/testbed/a.py"}}'
+    result = extract_code(response)
+    assert result.response_format == "json_tool_call"
+    assert result.code == "read_file(filepath='/testbed/a.py')"
