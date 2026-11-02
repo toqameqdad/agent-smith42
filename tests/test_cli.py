@@ -63,3 +63,18 @@ def test_cli_supports_streamable_http_mcp(monkeypatch):
     assert main(["--mcp-server", "http://127.0.0.1:8000/mcp"]) == 0
     assert clients[0].server_url == "http://127.0.0.1:8000/mcp"
     assert calls[0][1] is clients[0]
+
+
+def test_swebench_task_prompt_contains_real_line_breaks():
+    from agent_swebench import build_task_prompt
+    from models.tasks import SWEBenchTaskInput
+
+    task = SWEBenchTaskInput(
+        instance_id="example__repo-1",
+        problem_statement="Fix the bug.",
+        docker_image="example/image:latest",
+        eval_script="pytest -q",
+    )
+    prompt = build_task_prompt(task)
+    assert "Benchmark: SWE-bench\\nInstance" not in prompt
+    assert "Benchmark: SWE-bench\nInstance" in prompt
