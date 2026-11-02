@@ -184,3 +184,63 @@ def test_command_timeout_returns_partial_output_without_type_errors(tmp_path, mo
     result = run_command("printf started; sleep 1")
     assert result["exit_code"] == 124
     assert "timed out" in result["stderr"].lower()
+
+
+def test_docker_backed_command_and_patch_tools_use_container(tmp_path, monkeypatch):
+    from subprocess import CompletedProcess
+
+    root = tmp_path / "workspace"
+    (root / "src").mkdir(parents=True)
+    monkeypatch.setenv("TESTBED_PATH", str(root))
+    monkeypatch.setenv("DOCKER_CONTAINER", "swe-container")
+
+    calls = []
+    monkeypatch.setattr(
+        "tools.execution.docker_exec",
+        lambda container, arguments, timeout=120, workdir="/testbed": (
+            calls.append((container, arguments, workdir))
+            or CompletedProcess(arguments, 0, "container output", "")
+        ),
+    )
+    monkeypatch.setattr(
+        "tools.execution.sync_workspace_from_container",
+        lambda container, destination: None,
+    )
+
+    command_result = run_command("pytest -q", "/testbed/src")
+    assert command_result["stdout"] == "container output"
+    assert calls[0][0] == "swe-container"
+    assert calls[0][2] == "/testbed/src"
+
+    patch = get_patch()
+    assert patch == "container output"
+    assert calls[1][1] == ["git", "-c", "core.fileMode=false", "diff"]
+
+
+def test_docker_backed_run_tests_uses_task_evaluation_script(tmp_path, monkeypatch):
+    from subprocess import CompletedProcess
+    from tools.execution import run_tests
+
+    root = tmp_path / "workspace"
+    root.mkdir()
+    monkeypatch.setenv("TESTBED_PATH", str(root))
+    monkeypatch.setenv("DOCKER_CONTAINER", "swe-container")
+    monkeypatch.setenv("EVAL_SCRIPT", "pytest -q")
+
+    calls = []
+    monkeypatch.setattr(
+        "tools.execution.docker_exec",
+        lambda container, arguments, timeout=120, workdir="/testbed": (
+            calls.append((container, arguments, timeout, workdir))
+            or CompletedProcess(arguments, 0, "3 passed", "")
+        ),
+    )
+    monkeypatch.setattr(
+        "tools.execution.sync_workspace_from_container",
+        lambda container, destination: None,
+    )
+
+    result = run_tests()
+    assert result["stdout"] == "3 passed"
+    assert calls[0][1] == ["/bin/bash", "-lc", "pytest -q"]
+    assert calls[0][3] == "/testbed"
