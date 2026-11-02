@@ -7,8 +7,18 @@ from tools.docker_workspace import docker_exec, sync_workspace_from_container
 from tools.filesystem import repository_root, resolve_task_path
 
 
+def _as_text(value) -> str:
+    if isinstance(value, bytes):
+        return value.decode("utf-8", errors="replace")
+    return value or ""
+
+
 def _result(stdout: str, stderr: str, exit_code: int) -> dict:
-    return {"stdout": stdout, "stderr": stderr, "exit_code": exit_code}
+    return {
+        "stdout": _as_text(stdout),
+        "stderr": _as_text(stderr),
+        "exit_code": exit_code,
+    }
 
 
 def run_command(command: str, workdir: str = ".") -> dict:
@@ -31,7 +41,7 @@ def run_command(command: str, workdir: str = ".") -> dict:
             sync_workspace_from_container(container, root)
             return _result(result.stdout, result.stderr, result.returncode)
         except subprocess.TimeoutExpired as error:
-            return _result(error.stdout or "", (error.stderr or "") + "\nCommand timed out.", 124)
+            return _result(_as_text(error.stdout), _as_text(error.stderr) + "\nCommand timed out.", 124)
 
     try:
         result = subprocess.run(
@@ -87,7 +97,7 @@ def run_tests() -> dict:
             )
         return _result(result.stdout, result.stderr, result.returncode)
     except subprocess.TimeoutExpired as error:
-        return _result(error.stdout or "", (error.stderr or "") + "\nTests timed out.", 124)
+        return _result(_as_text(error.stdout), _as_text(error.stderr) + "\nTests timed out.", 124)
 
 
 def get_patch() -> str:
