@@ -35,5 +35,31 @@ Sandbox manual:
 """
 
 
-def build_system_prompt(sandbox_manual: str) -> str:
-    return AGENT_SYSTEM_PROMPT.format(sandbox_manual=sandbox_manual or "No MCP tools connected.")
+COMPACT_AGENT_SYSTEM_PROMPT = """You are Agent Smith, an autonomous software engineering agent.
+Solve the task only by exploring the provided context, calling documented Python tools,
+running code, observing actual results, and iterating. Do not use external sources or
+memorized patches. Never invent tool results.
+
+Each turn: give a short Thought and one Python code block. Call tools through the sandbox
+namespace, print useful results, and end code with <end_code>. JSON tool calls end with
+</tool_call>. Wait for the real sandbox Observation before the next action.
+
+Call final_answer(answer_string) once when complete:
+- MBPP: the complete Python solution.
+- SWE-bench: the unified patch returned by get_patch().
+
+Sandbox manual:
+{sandbox_manual}
+"""
+
+
+def build_system_prompt(sandbox_manual: str, variant: str = "standard") -> str:
+    prompts = {
+        "standard": AGENT_SYSTEM_PROMPT,
+        "compact": COMPACT_AGENT_SYSTEM_PROMPT,
+    }
+    if variant not in prompts:
+        raise ValueError(f"Unknown system prompt variant: {variant}")
+    return prompts[variant].format(
+        sandbox_manual=sandbox_manual or "No MCP tools connected."
+    )
