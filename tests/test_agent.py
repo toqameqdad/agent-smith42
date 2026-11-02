@@ -117,3 +117,8 @@ def test_orchestrator_runs_thought_code_observation_until_final_answer():
     assert result.total_requests == 2
     assert result.steps[0].sandbox_output == "exploration complete"
     assert "Observation from the real sandbox" in result.steps[1].llm_output or len(sandbox.calls) == 2
+
+
+def test_tool_call_with_builtin_name_uses_generic_dispatch():
+    result = extract_code('<tool_call>{"name":"print","arguments":{"value":"hello"}}</tool_call>')
+    assert result.code == "call_mcp_tool('print', **{'value': 'hello'})"
