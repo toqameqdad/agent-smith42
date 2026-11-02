@@ -4,6 +4,8 @@ import fnmatch
 import os
 from pathlib import Path
 
+from tools.docker_workspace import sync_file_to_container
+
 
 def repository_root() -> Path:
     return Path(os.getenv("TESTBED_PATH", os.getcwd())).resolve()
@@ -52,6 +54,9 @@ def edit_file(filepath: str, old_str: str, new_str: str) -> str:
             f"old_str occurs {occurrences} times; provide a unique exact match."
         )
     path.write_text(content.replace(old_str, new_str, 1), encoding="utf-8")
+    container = os.getenv("DOCKER_CONTAINER")
+    if container:
+        sync_file_to_container(container, repository_root(), path)
     return f"Updated {path}"
 
 
