@@ -16,7 +16,12 @@ IGNORED = {".git", "__pycache__", ".venv", "node_modules"}
 
 def _source_files(root: Path, file_pattern: str = "*"):
     for path in root.rglob(file_pattern):
-        if path.is_file() and not any(part in IGNORED for part in path.parts):
+        if (
+            path.is_file()
+            and not path.is_symlink()
+            and path.resolve().is_relative_to(root)
+            and not any(part in IGNORED for part in path.parts)
+        ):
             yield path
 
 
