@@ -11,7 +11,7 @@ The project targets two coding benchmarks:
 - **MBPP** — Python programming problems.
 - **SWE-bench** — real-world software engineering issues.
 
-The current implementation focuses on the sandbox execution layer and its MCP integration. The benchmark agents, orchestration loop, and benchmark evaluation are still under development.
+The repository now includes the isolated sandbox, shared Thought → Code → Observation orchestration, LLM provider abstraction with API-key rotation, response-format extraction, mandatory SWE-bench MCP tools, and MBPP/SWE-bench CLI entry points. End-to-end benchmark validation and the required comparative benchmark report are still outstanding.
 
 ## Instructions
 
@@ -75,7 +75,46 @@ The connected server's tools, resources, prompts, and tool input schemas are dis
 
 MCP tools with valid, non-conflicting Python identifiers are injected as callable functions. Use `call_mcp_tool("exact-tool-name", key=value)` for names that cannot be exposed directly.
 
-### Sandbox functions
+#
+### Run the MBPP agent
+
+The evaluation environment must provide the selected provider's API key through an environment variable. Multiple comma-separated keys can be supplied in one variable, or several variable names can be listed with `--api-key-env`.
+
+```bash
+uv run python agent_mbpp.py \
+  --task-file ../cache/mbpp_task.json \
+  --output ../cache/mbpp_solution.json \
+  --model-name "provider/model-name" \
+  --provider-url "https://provider.example/v1" \
+  --api-key-env "OPENROUTER_API_KEY,OPENROUTER_API_KEY_2"
+```
+
+The MBPP agent uses at most 10 iterations, 6,000 cumulative input tokens, 1,500 cumulative output tokens, and 120 seconds per task.
+
+### Run the SWE-bench agent
+
+Docker must be installed and available to the current user. The task JSON must contain the image and evaluation script supplied by the moulinette.
+
+```bash
+uv run python agent_swebench.py \
+  --task-file ../cache/swebench_task.json \
+  --output ../cache/swebench_solution.json \
+  --model-name "provider/model-name" \
+  --provider-url "https://provider.example/v1" \
+  --api-key-env "OPENROUTER_API_KEY,OPENROUTER_API_KEY_2"
+```
+
+The SWE-bench agent starts the task image, copies the repository workspace for scoped host-side file tools, routes commands and tests into the container, and removes the container when the run exits. Its limits are 30 iterations, 300,000 cumulative input tokens, 10,000 cumulative output tokens, and 900 seconds per task.
+
+The MCP servers can also be started independently:
+
+```bash
+uv run python mcp_tools_mbpp.py
+uv run python mcp_tools_swebench.py
+uv run python mcp_tools_swebench.py --transport streamable-http --port 8000
+```
+
+## Sandbox functions
 
 - `final_answer(answer_string)` — captures the final answer and signals task completion.
 - `mcp_list_resources()` — lists resources exposed by the connected MCP server.
@@ -111,7 +150,7 @@ chrooted Python runtime
 
 MCP connections are owned by the trusted host-side client. Calls made by sandbox wrappers are sent through a JSON-lines bridge to that client; the sandboxed Python process does not receive direct network access.
 
-The intended full agent architecture adds an LLM provider and an agent orchestrator around this execution layer. Those components are not yet implemented.
+The LLM provider and agent orchestrator are implemented around this execution layer. The MBPP and SWE-bench command-line entry points connect the task loader, provider, MCP server, sandbox, and output model.
 
 ## Agent loop
 
@@ -124,7 +163,7 @@ The intended agent loop is:
 5. Repeat until the code calls `final_answer(answer_string)` or an agent limit is reached.
 6. Convert the captured answer and execution metrics into the benchmark output format.
 
-The orchestration and benchmark-output pipeline are still in progress; the steps above describe the target design, not a completed end-to-end agent.
+The shared orchestration loop and benchmark output model are implemented. Actual solve-rate claims remain pending until the agents are run against the moulinette evaluation tasks.
 
 ## Sandbox design
 
@@ -158,7 +197,7 @@ The MCP client supports:
 - Tool wrappers callable from sandbox Python.
 - A generated manual containing tool descriptions and input schemas.
 
-The benchmark-specific MCP server scripts and the mandatory filesystem, code-search, and execution tools are still being developed.
+The repository contains separate MBPP and SWE-bench MCP server scripts. The SWE-bench server exposes the mandatory filesystem, code-search, and execution tools; the MBPP server exposes sandboxed candidate-test execution.
 
 ## Benchmark results and analysis
 
