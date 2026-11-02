@@ -247,10 +247,14 @@ def execute_in_sandbox(
             "output": result.stdout,
         }
 
-    except subprocess.TimeoutExpired:
+    except subprocess.TimeoutExpired as error:
+        partial_output = error.stdout or ""
+        if isinstance(partial_output, bytes):
+            partial_output = partial_output.decode("utf-8", errors="replace")
         return {
             "status": "error",
-            "message": "Execution timed out.",
+            "message": "Execution timed out; the returned output may be partial.",
+            "output": partial_output,
         }
 
     except (OSError, subprocess.SubprocessError, RuntimeError, ValueError) as error:
