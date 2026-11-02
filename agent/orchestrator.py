@@ -128,7 +128,7 @@ class AgentOrchestrator:
                     execution_output = raw_output or message or str(
                         result.get("status", "")
                     )
-                    sandbox_output = "\\n".join(
+                    sandbox_output = "\n".join(
                         part for part in (extraction.warning, execution_output) if part
                     )
                     if result.get("status") == "final_answer":
