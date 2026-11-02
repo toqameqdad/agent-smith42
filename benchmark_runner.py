@@ -146,6 +146,7 @@ def _run_agent(
             "total_time_seconds": elapsed,
             "steps": [],
             "system_prompt": "",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "error": (
                 f"Agent process exited with code {process.returncode}. "
                 f"{(stderr or '').strip()[-3000:]}"
