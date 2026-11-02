@@ -4,6 +4,7 @@ import time
 from typing import Any, Protocol
 
 from agent.code_extractor import extract_code
+from llm.client import LLMRequestError
 from agent.prompts import build_system_prompt
 from models.metrics import StepMetrics
 from models.outputs import SolutionOutput
@@ -104,8 +105,27 @@ class AgentOrchestrator:
                     max_tokens=remaining_output,
                     stop=["<end_code>", "</tool_call>"],
                 )
-            except Exception as exception:
+            except LLMRequestError as exception:
+                total_requests += exception.attempts
                 error = f"LLM request failed: {exception}"
+                steps.append(StepMetrics(
+                    step=step_number,
+                    input_tokens=0,
+                    output_tokens=0,
+                    request_time_ms=exception.request_time_ms,
+                    api_url=exception.api_url or self.api_url,
+                    model_name=exception.model_name or self.model_name,
+                    llm_output="",
+                    sandbox_input="",
+                    sandbox_output=(
+                        f"LLM request failed after {exception.attempts} attempt(s): "
+                        f"{exception}"
+                    ),
+                    retries=exception.retries,
+                ))
+                break
+            except Exception as exception:
+                error = f"LLM request failed before a response was available: {exception}"
                 break
 
             total_requests += response.retries + 1
