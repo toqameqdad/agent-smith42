@@ -1,10 +1,14 @@
 """Filesystem tools scoped to the SWE-bench task repository."""
 
+import ast
 import fnmatch
 import os
+import shlex
+import shutil
+import subprocess
 from pathlib import Path
 
-from tools.docker_workspace import sync_file_to_container
+from tools.docker_workspace import docker_exec, sync_file_to_container
 
 
 def repository_root() -> Path:
@@ -53,11 +57,56 @@ def edit_file(filepath: str, old_str: str, new_str: str) -> str:
         raise ValueError(
             f"old_str occurs {occurrences} times; provide a unique exact match."
         )
-    path.write_text(content.replace(old_str, new_str, 1), encoding="utf-8")
+    updated = content.replace(old_str, new_str, 1)
+    path.write_text(updated, encoding="utf-8")
     container = os.getenv("DOCKER_CONTAINER")
+    root = repository_root()
     if container:
-        sync_file_to_container(container, repository_root(), path)
-    return f"Updated {path}"
+        sync_file_to_container(container, root, path)
+
+    feedback = [f"Updated {path}."]
+    if path.suffix == ".py":
+        try:
+            ast.parse(updated, filename=str(path))
+        except SyntaxError as error:
+            feedback.append(
+                f"WARNING: Python syntax error at line {error.lineno}: {error.msg}. "
+                "The edit was saved; fix this before running tests."
+            )
+            return "\\n".join(feedback)
+
+        ruff = shutil.which("ruff")
+        if container:
+            relative = path.relative_to(root)
+            remote_path = f"/testbed/{relative}"
+            result = docker_exec(
+                container,
+                ["/bin/bash", "-lc", f"ruff check {shlex.quote(remote_path)}"],
+                timeout=30,
+            )
+            if result.returncode == 127:
+                feedback.append("Python syntax is valid; ruff is not installed in the task container.")
+            elif result.returncode:
+                feedback.append(
+                    "Lint feedback (ruff): " + (result.stdout + result.stderr).strip()
+                )
+            else:
+                feedback.append("Python syntax and ruff checks passed.")
+        elif ruff:
+            result = subprocess.run(
+                [ruff, "check", str(path)],
+                capture_output=True,
+                text=True,
+                timeout=30,
+                check=False,
+            )
+            if result.returncode:
+                feedback.append("Lint feedback (ruff): " + (result.stdout + result.stderr).strip())
+            else:
+                feedback.append("Python syntax and ruff checks passed.")
+        else:
+            feedback.append("Python syntax is valid; ruff is unavailable, so lint was not checked.")
+    return "\\n".join(feedback)
 
 
 def list_files(directory: str = ".", pattern: str = "*") -> str:
